@@ -1,0 +1,665 @@
+<title>Bounty Hunter Proposal</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: single reading column (~880px) of sections; each section pairs plain rules with a Discord-faithful mockup. */
+:root {
+  --bg: #F2F3F5;
+  --surface: #FFFFFF;
+  --fg: #1C2230;
+  --muted: #5B6476;
+  --line: #D9DCE3;
+  --accent: #A8740C;        /* coin gold, darkened for text on light */
+  --accent-soft: #F6EBD3;
+  --good: #1F7A4D;
+  --warn: #B4531A;
+  --font-display: "Familjen Grotesk", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Inter", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", Consolas, "Courier New", monospace;
+  /* Discord mockup palette: identical in both page themes on purpose (Discord dark mode) */
+  --dc-bg: #313338;
+  --dc-embed: #2B2D31;
+  --dc-text: #DBDEE1;
+  --dc-muted: #949BA4;
+  --dc-head: #F2F3F5;
+  --dc-link: #00A8FC;
+  --dc-blurple: #5865F2;
+  --dc-gold: #F0B232;
+  --dc-green: #23A55A;
+  --dc-red: #F23F43;
+  --dc-btn: #4E5058;
+  --dc-react: #2B2D31;
+  --dc-react-on: #373A6B;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #14171D; --surface: #1C2028; --fg: #E6E8EE; --muted: #9AA2B3; --line: #2C323D;
+    --accent: #E6B24A; --accent-soft: #33291A; --good: #4CC38A; --warn: #F08A4B;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #14171D; --surface: #1C2028; --fg: #E6E8EE; --muted: #9AA2B3; --line: #2C323D;
+  --accent: #E6B24A; --accent-soft: #33291A; --good: #4CC38A; --warn: #F08A4B;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--fg);
+  font-family: var(--font-body); font-size: 15px; line-height: 1.6;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 40px 64px;
+}
+.wrap { max-width: 880px; margin: 0 auto; display: flex; flex-direction: column; gap: 56px; }
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; line-height: 1.15; margin: 0; }
+h1 { font-size: clamp(2.2rem, 6vw, 3.4rem); letter-spacing: -0.02em; }
+h2 { font-size: 1.65rem; letter-spacing: -0.01em; }
+h3 { font-size: 1.1rem; }
+p { margin: 0; max-width: 66ch; }
+.eyebrow { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.12em; color: var(--accent); font-weight: 600; }
+.lede { font-size: 1.1rem; color: var(--muted); }
+code, .cmd { font-family: var(--font-mono); font-size: 0.88em; }
+.cmd { background: var(--accent-soft); color: var(--fg); padding: 1px 6px; border-radius: 4px; white-space: nowrap; }
+
+header { display: flex; flex-direction: column; gap: 14px; }
+.draft { align-self: flex-start; font-size: 0.78rem; font-weight: 600; border: 1px solid var(--accent); color: var(--accent); padding: 3px 10px; border-radius: 999px; }
+nav.toc { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+nav.toc a { font-size: 0.85rem; color: var(--fg); text-decoration: none; border: 1px solid var(--line); background: var(--surface); padding: 5px 12px; border-radius: 999px; }
+nav.toc a:hover, nav.toc a:focus-visible { border-color: var(--accent); outline: none; }
+
+section { display: flex; flex-direction: column; gap: 18px; scroll-margin-top: 16px; }
+.sec-head { display: flex; flex-direction: column; gap: 6px; }
+
+/* Week timeline */
+.timeline { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.tl-step { padding: 16px; display: flex; flex-direction: column; gap: 6px; border-right: 1px solid var(--line); min-width: 0; }
+.tl-step:last-child { border-right: 0; }
+.tl-when { font-family: var(--font-mono); font-size: 0.78rem; color: var(--accent); font-weight: 600; }
+.tl-step p { font-size: 0.9rem; color: var(--muted); }
+.tl-step strong { color: var(--fg); }
+@media (max-width: 680px) {
+  .timeline { grid-template-columns: 1fr; }
+  .tl-step { border-right: 0; border-bottom: 1px solid var(--line); }
+  .tl-step:last-child { border-bottom: 0; }
+}
+
+/* Points */
+.rules { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
+.rule { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.rule .big { font-family: var(--font-display); font-size: 2rem; font-weight: 700; color: var(--accent); font-variant-numeric: tabular-nums; line-height: 1.1; }
+.rule p { font-size: 0.9rem; color: var(--muted); }
+.balances { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+.bal { border-top: 3px solid var(--accent); background: var(--surface); border-radius: 0 0 10px 10px; padding: 16px; display: flex; flex-direction: column; gap: 6px; }
+.bal.life { border-top-color: var(--good); }
+.table-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+table { border-collapse: collapse; width: 100%; font-size: 0.9rem; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 600; }
+tr:last-child td { border-bottom: 0; }
+td.num { text-align: right; }
+th.num { text-align: right; }
+.note { font-size: 0.88rem; color: var(--muted); }
+.tag { display: inline-block; font-size: 0.72rem; font-weight: 600; padding: 1px 7px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); }
+
+/* Tabs used to switch mockup states */
+.tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+.tabs button { font: inherit; font-size: 0.85rem; cursor: pointer; border: 1px solid var(--line); background: var(--surface); color: var(--fg); padding: 6px 12px; border-radius: 6px; }
+.tabs button[aria-selected="true"] { border-color: var(--accent); background: var(--accent-soft); font-weight: 600; }
+.tabs button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ---------- Discord mockups ---------- */
+.dc { background: var(--dc-bg); color: var(--dc-text); border-radius: 10px; padding: 14px 16px 16px; font-family: "gg sans", "Noto Sans", "Segoe UI", system-ui, sans-serif; font-size: 15px; line-height: 1.375; display: flex; flex-direction: column; gap: 14px; overflow: hidden; }
+.dc-chan { color: var(--dc-muted); font-size: 0.8rem; font-weight: 600; border-bottom: 1px solid #3F4147; padding-bottom: 8px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.dc-chan b { color: var(--dc-head); }
+.dc-pin { font-size: 0.72rem; background: #3F4147; color: var(--dc-text); padding: 1px 6px; border-radius: 4px; font-weight: 600; }
+.dc-msg { display: grid; grid-template-columns: 40px minmax(0, 1fr); column-gap: 14px; }
+.dc-av { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: 0.95rem; color: #fff; }
+.av-bot { background: linear-gradient(135deg, #C4881C, #6E4A0B); }
+.av-a { background: #3BA55C; } .av-b { background: #EB459E; } .av-c { background: #5865F2; } .av-d { background: #ED4245; } .av-e { background: #1ABC9C; }
+.dc-body { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.dc-name { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+.dc-name b { color: var(--dc-head); font-weight: 600; }
+.dc-name b.admin { color: #E67E22; }
+.dc-app { background: var(--dc-blurple); color: #fff; font-size: 0.62rem; font-weight: 700; padding: 1px 4px; border-radius: 3px; letter-spacing: 0.02em; }
+.dc-time { color: var(--dc-muted); font-size: 0.75rem; }
+.dc-used { grid-column: 1 / -1; font-size: 0.82rem; color: var(--dc-muted); padding-left: 54px; margin-bottom: 2px; }
+.dc-used b { color: var(--dc-text); font-weight: 500; }
+.dc-used .slash { color: var(--dc-link); }
+.dc-embed { background: var(--dc-embed); border-left: 4px solid var(--dc-gold); border-radius: 4px; padding: 10px 16px 14px 12px; max-width: 520px; display: flex; flex-direction: column; gap: 8px; margin-top: 2px; }
+.dc-embed.green { border-left-color: var(--dc-green); }
+.dc-embed.blurple { border-left-color: var(--dc-blurple); }
+.dc-embed.red { border-left-color: var(--dc-red); }
+.dc-etitle { color: var(--dc-head); font-weight: 700; font-size: 1rem; }
+.dc-ehead { font-size: 0.8rem; color: var(--dc-head); font-weight: 600; }
+.dc-edesc { font-size: 0.9rem; }
+.dc-edesc b, .dc-field b { color: var(--dc-head); }
+.dc-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px 16px; }
+.dc-field { font-size: 0.88rem; min-width: 0; }
+.dc-fname { color: var(--dc-head); font-weight: 600; font-size: 0.82rem; margin-bottom: 2px; }
+.dc-foot { font-size: 0.75rem; color: var(--dc-muted); }
+.dc-block { font-family: var(--font-mono); font-size: 0.8rem; background: #1E1F22; border: 1px solid #1A1B1E; border-radius: 4px; padding: 8px 10px; overflow-x: auto; white-space: pre; color: var(--dc-text); line-height: 1.5; }
+.dc-shot { width: 260px; max-width: 100%; aspect-ratio: 16 / 10; border-radius: 6px; background:
+  linear-gradient(160deg, rgba(0,0,0,0) 40%, rgba(0,0,0,.45)),
+  repeating-linear-gradient(45deg, #3a3f2b 0 10px, #343826 10px 20px);
+  display: grid; place-items: end start; padding: 8px; font-size: 0.72rem; color: #E8E2C0; font-family: var(--font-mono); }
+.dc-chat { background: rgba(0,0,0,.6); color: #7FE07F; padding: 2px 6px; border-radius: 3px; }
+.dc-code { background: #1E1F22; border: 1px solid #3F4147; border-radius: 4px; padding: 6px 10px; font-size: 0.88rem; }
+.dc-code b { color: var(--dc-gold); font-size: 1rem; letter-spacing: 0.02em; }
+.dc-reacts { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 2px; }
+.dc-react { background: var(--dc-react); border: 1px solid transparent; border-radius: 8px; padding: 1px 7px; font-size: 0.82rem; color: var(--dc-text); }
+.dc-react.on { background: var(--dc-react-on); border-color: var(--dc-blurple); }
+.dc-eph { font-size: 0.75rem; color: var(--dc-muted); }
+.dc-eph a { color: var(--dc-link); text-decoration: none; }
+.dc-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.dc-btn { font-size: 0.85rem; font-weight: 500; padding: 5px 14px; border-radius: 4px; background: var(--dc-btn); color: #fff; }
+.dc-btn.go { background: var(--dc-green); }
+.dc-bar { height: 6px; border-radius: 3px; background: #1E1F22; overflow: hidden; }
+.dc-bar span { display: block; height: 100%; background: var(--dc-gold); }
+.dc-pill { display: inline-block; font-size: 0.72rem; font-weight: 700; padding: 1px 6px; border-radius: 3px; background: #4A3B12; color: var(--dc-gold); }
+.dc-pill.hot { background: #5A1E1F; color: #FF8A8C; }
+.dc-pill.ok { background: #173B27; color: #57D98A; }
+
+.grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; align-items: start; }
+.cmd-list { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 8px 16px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; font-size: 0.92rem; }
+.cmd-list dt { font-family: var(--font-mono); font-size: 0.85rem; color: var(--accent); font-weight: 600; }
+.cmd-list dd { margin: 0; color: var(--muted); }
+.cmd-list .sub { grid-column: 1 / -1; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--fg); font-weight: 600; padding-top: 8px; border-top: 1px solid var(--line); }
+.cmd-list .sub:first-child { border-top: 0; padding-top: 0; }
+@media (max-width: 480px) { .cmd-list { grid-template-columns: 1fr; gap: 2px 0; } .cmd-list dd { margin-bottom: 8px; } }
+
+.qs { display: flex; flex-direction: column; gap: 10px; margin: 0; padding: 0; list-style: none; counter-reset: q; }
+.qs li { counter-increment: q; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px 14px 52px; position: relative; }
+.qs li::before { content: counter(q); position: absolute; left: 16px; top: 13px; width: 24px; height: 24px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-weight: 700; font-size: 0.8rem; display: grid; place-items: center; }
+.qs b { display: block; margin-bottom: 2px; }
+.qs span { color: var(--muted); font-size: 0.9rem; }
+footer { color: var(--muted); font-size: 0.85rem; border-top: 1px solid var(--line); padding-top: 16px; }
+@media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+</style>
+
+<div class="wrap">
+
+<header>
+  <span class="draft">Draft for admin feedback · numbers are examples</span>
+  <h1>Bounty Hunter</h1>
+  <p class="lede">A year-round clan activity run by the Myriad Events Bot. Every Monday a new boss bounty goes up. Members post their drop, an admin approves it, and points are paid out. Points can be spent in a shop and also count toward monthly and all-time leaderboards.</p>
+  <p class="note">Every bounty comes with a secret <strong>code word</strong> that only appears when the bounty is posted. It must be visible in each screenshot, so only drops from that week count.</p>
+  <p class="note">Runs all the time, including during bingo and drop races. Bounty Hunter commands all start with <span class="cmd">/bh</span> so they never mix with event commands.</p>
+  <nav class="toc" aria-label="Sections">
+    <a href="#week">How a week works</a>
+    <a href="#points">Points</a>
+    <a href="#pinned">Pinned bounty</a>
+    <a href="#submit">Submitting</a>
+    <a href="#awards">Awards channel</a>
+    <a href="#commands">Commands</a>
+    <a href="#leaderboard">Leaderboards</a>
+    <a href="#shop">Shop</a>
+    <a href="#questions">Questions for admins</a>
+  </nav>
+</header>
+
+<!-- WEEK -->
+<section id="week">
+  <div class="sec-head">
+    <span class="eyebrow">The weekly cycle</span>
+    <h2>How a week works</h2>
+    <p>All times are UTC (game time). The posting hour changes every week so no timezone always gets the head start.</p>
+  </div>
+  <div class="timeline">
+    <div class="tl-step">
+      <span class="tl-when">MON · random hour</span>
+      <strong>New bounty posted</strong>
+      <p>The bot picks a random hour on Monday (00:00–23:00 UTC), posts the new boss with this week's <strong>code word</strong> and pins it. Last week's bounty closes.</p>
+    </div>
+    <div class="tl-step">
+      <span class="tl-when">MON → THU</span>
+      <strong>Race for first claim</strong>
+      <p>The first player to get the drop approved gets the big reward. Everyone after that gets the smaller one.</p>
+    </div>
+    <div class="tl-step">
+      <span class="tl-when">+72 HOURS</span>
+      <strong>Multiplier kicks in</strong>
+      <p>If nobody has claimed it 3 days (72 hours) after posting, the <strong>first claim</strong> becomes worth ×2.</p>
+    </div>
+    <div class="tl-step">
+      <span class="tl-when">UNTIL NEXT MON</span>
+      <strong>Everyone can still claim</strong>
+      <p>One claim per player. The pinned post updates live as people claim, until the next bounty replaces it.</p>
+    </div>
+  </div>
+</section>
+
+<!-- POINTS -->
+<section id="points">
+  <div class="sec-head">
+    <span class="eyebrow">Points system</span>
+    <h2>Who gets what</h2>
+    <p>The numbers below are placeholders. Admins set them per bounty in the Google Sheet, so a harder boss can pay more.</p>
+  </div>
+  <div class="rules">
+    <div class="rule"><span class="big">10</span><strong>First claim</strong><p>The first player whose claim is approved.</p></div>
+    <div class="rule"><span class="big">5</span><strong>Every later claim</strong><p>Everyone else who completes the bounty that week. One claim per player.</p></div>
+    <div class="rule"><span class="big">×2</span><strong>Unclaimed for 72 hours</strong><p>Doubles the first claim only (10 → 20). Later claims stay at 5.</p></div>
+  </div>
+
+  <h3>Bounties with several parts</h3>
+  <p>A bounty can need more than one drop. Players can post each part as they get it, and the bot tracks their progress. The bounty counts as claimed when <strong>all parts</strong> are approved, so "first claim" means the first player to finish every part.</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Example: Araxxor bounty</th><th>Needed</th><th>Donini</th><th>1Shylybored</th></tr></thead>
+      <tbody>
+        <tr><td>Part 1 · any Araxxi leg piece</td><td>1</td><td>✔ approved Tue</td><td>✔ approved Wed</td></tr>
+        <tr><td>Part 2 · Araxxi's eye, fang or web</td><td>1</td><td>— waiting</td><td>✔ approved Fri</td></tr>
+        <tr><td><strong>Result</strong></td><td></td><td>1 of 2 · not claimed yet</td><td><strong>Claimed</strong> · +10 (first)</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="note">Donini started first, but 1Shylybored finished first, so 1Shylybored gets the first-claim points.</p>
+
+  <h3>Two point totals per player</h3>
+  <div class="balances">
+    <div class="bal">
+      <span class="tag">Wallet</span>
+      <strong>Spendable points</strong>
+      <p class="note">Goes up when you claim, goes down when you buy something in the shop.</p>
+    </div>
+    <div class="bal life">
+      <span class="tag">Earned</span>
+      <strong>Points earned (never goes down)</strong>
+      <p class="note">Everything you have ever earned. Leaderboards use this, so shopping never costs you your rank.</p>
+    </div>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Valxen's month</th><th class="num">Change</th><th class="num">Wallet</th><th class="num">Earned</th></tr></thead>
+      <tbody>
+        <tr><td>Week 1 · first claim, ×2 active</td><td class="num">+20</td><td class="num">20</td><td class="num">20</td></tr>
+        <tr><td>Week 2 · later claim</td><td class="num">+5</td><td class="num">25</td><td class="num">25</td></tr>
+        <tr><td>Shop · custom role colour</td><td class="num">−25</td><td class="num">0</td><td class="num">25</td></tr>
+        <tr><td>Week 3 · first claim</td><td class="num">+10</td><td class="num">10</td><td class="num">35</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- PINNED -->
+<section id="pinned">
+  <div class="sec-head">
+    <span class="eyebrow">#bounty-board</span>
+    <h2>The pinned bounty</h2>
+    <p>One message, pinned, that the bot edits as the week goes on. Switch between the tabs to see how it changes.</p>
+  </div>
+  <div class="tabs" role="tablist" aria-label="Pinned bounty state">
+    <button role="tab" id="tab-p1" aria-selected="true" data-group="pin" data-show="pin-1">Monday · just posted</button>
+    <button role="tab" id="tab-p2" aria-selected="false" data-group="pin" data-show="pin-2">Thursday · ×2 active</button>
+    <button role="tab" id="tab-p3" aria-selected="false" data-group="pin" data-show="pin-3">Saturday · claimed</button>
+  </div>
+
+  <div class="dc" data-panel="pin" id="pin-1">
+    <div class="dc-chan"># <b>bounty-board</b> <span class="dc-pin">📌 Pinned</span></div>
+    <div class="dc-msg">
+      <div class="dc-av av-bot">M</div>
+      <div class="dc-body">
+        <div class="dc-name"><b>Myriad Events Bot</b><span class="dc-app">APP</span><span class="dc-time">Mon 14:00 UTC</span></div>
+        <div class="dc-embed">
+          <div class="dc-ehead">🎯 BOUNTY · WEEK 47</div>
+          <div class="dc-etitle">Araxxor</div>
+          <div class="dc-edesc">Post a screenshot of each drop in <span style="color:var(--dc-link)">#bounty-submissions</span>. The <b>code word</b> must be visible in the screenshot. Both parts are needed to claim.</div>
+          <div class="dc-code">🔑 Code word: <b>Wyvern37</b><br>Type it in your in-game chat so it shows in every screenshot. No code word, no approval.</div>
+          <div class="dc-fields">
+            <div class="dc-field"><div class="dc-fname">Part 1</div>Any Araxxi leg piece</div>
+            <div class="dc-field"><div class="dc-fname">Part 2</div>Araxxi's eye, fang or web</div>
+          </div>
+          <div class="dc-fields">
+            <div class="dc-field"><div class="dc-fname">First claim</div><span class="dc-pill">10 pts</span> still open</div>
+            <div class="dc-field"><div class="dc-fname">Later claims</div>5 pts each</div>
+            <div class="dc-field"><div class="dc-fname">×2 multiplier</div>Thu 14:00 UTC if still unclaimed</div>
+          </div>
+          <div class="dc-field"><div class="dc-fname">Claimed by (0)</div>Nobody yet. Be first!</div>
+          <div class="dc-foot">Ends Mon 24 Nov when the next bounty is posted · /bhbounty for your progress</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="dc" data-panel="pin" id="pin-2" hidden>
+    <div class="dc-chan"># <b>bounty-board</b> <span class="dc-pin">📌 Pinned</span></div>
+    <div class="dc-msg">
+      <div class="dc-av av-bot">M</div>
+      <div class="dc-body">
+        <div class="dc-name"><b>Myriad Events Bot</b><span class="dc-app">APP</span><span class="dc-time">Mon 14:00 UTC (edited)</span></div>
+        <div class="dc-embed red">
+          <div class="dc-ehead">🎯 BOUNTY · WEEK 47</div>
+          <div class="dc-etitle">Araxxor <span class="dc-pill hot">🔥 ×2 ACTIVE</span></div>
+          <div class="dc-edesc">Nobody has claimed this in 3 days. <b>The first claim is now worth 20 points.</b></div>
+          <div class="dc-code">🔑 Code word: <b>Wyvern37</b><br>Type it in your in-game chat so it shows in every screenshot. No code word, no approval.</div>
+          <div class="dc-fields">
+            <div class="dc-field"><div class="dc-fname">Part 1</div>Any Araxxi leg piece</div>
+            <div class="dc-field"><div class="dc-fname">Part 2</div>Araxxi's eye, fang or web</div>
+          </div>
+          <div class="dc-fields">
+            <div class="dc-field"><div class="dc-fname">First claim</div><span class="dc-pill hot">20 pts</span> <s style="color:var(--dc-muted)">10</s></div>
+            <div class="dc-field"><div class="dc-fname">Later claims</div>5 pts each</div>
+            <div class="dc-field"><div class="dc-fname">In progress</div>2 hunters have 1 of 2 parts</div>
+          </div>
+          <div class="dc-field"><div class="dc-fname">Claimed by (0)</div>Nobody yet.</div>
+          <div class="dc-foot">Ends Mon 24 Nov when the next bounty is posted · /bhbounty for your progress</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="dc" data-panel="pin" id="pin-3" hidden>
+    <div class="dc-chan"># <b>bounty-board</b> <span class="dc-pin">📌 Pinned</span></div>
+    <div class="dc-msg">
+      <div class="dc-av av-bot">M</div>
+      <div class="dc-body">
+        <div class="dc-name"><b>Myriad Events Bot</b><span class="dc-app">APP</span><span class="dc-time">Mon 14:00 UTC (edited)</span></div>
+        <div class="dc-embed green">
+          <div class="dc-ehead">🎯 BOUNTY · WEEK 47</div>
+          <div class="dc-etitle">Araxxor <span class="dc-pill ok">FIRST CLAIM TAKEN</span></div>
+          <div class="dc-edesc">🥇 <b>1Shylybored</b> claimed it first on Fri 19:42 UTC for <b>20 points</b> (×2). You can still claim it for 5 points until Monday.</div>
+          <div class="dc-code">🔑 Code word: <b>Wyvern37</b><br>Type it in your in-game chat so it shows in every screenshot. No code word, no approval.</div>
+          <div class="dc-fields">
+            <div class="dc-field"><div class="dc-fname">Part 1</div>Any Araxxi leg piece</div>
+            <div class="dc-field"><div class="dc-fname">Part 2</div>Araxxi's eye, fang or web</div>
+          </div>
+          <div class="dc-field"><div class="dc-fname">Claimed by (3)</div>🥇 1Shylybored · +20<br>2. Valxen · +5<br>3. Diodegro · +5</div>
+          <div class="dc-field"><div class="dc-fname">In progress</div>1 hunter has 1 of 2 parts</div>
+          <div class="dc-foot">Ends Mon 24 Nov when the next bounty is posted · /bhbounty for your progress</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SUBMIT -->
+<section id="submit">
+  <div class="sec-head">
+    <span class="eyebrow">#bounty-submissions</span>
+    <h2>Submitting and approving</h2>
+    <p>Same habit as the bingo and drop race: post a screenshot with the item name, then an admin reacts ✅. The bot only watches this channel for bounties, so event posts and bounty posts never get mixed up. Each approval is written to its own Bounty Hunter Google Sheet.</p>
+  </div>
+  <div class="rules">
+    <div class="rule"><strong>1 · Type the code word</strong><p>When the drop appears, type this week's code word in your in-game chat (for example clan chat) so it is on screen.</p></div>
+    <div class="rule"><strong>2 · Screenshot drop + code word</strong><p>One screenshot that shows the drop and the code word together. A screenshot from before the bounty was posted can't have it.</p></div>
+    <div class="rule"><strong>3 · Admin checks, then ✅</strong><p>The bot can't read images, so the admin checks the code word before reacting. Missing code word = no ✅.</p></div>
+  </div>
+  <p class="note">The bot picks a secret code word when it posts the bounty. Admins can also choose their own in the sheet beforehand. Each week has a different one.</p>
+  <div class="dc">
+    <div class="dc-chan"># <b>bounty-submissions</b></div>
+    <div class="dc-msg">
+      <div class="dc-av av-b">D</div>
+      <div class="dc-body">
+        <div class="dc-name"><b>Donini</b><span class="dc-time">Tue 21:07 UTC</span></div>
+        <div>araxxi leg piece, part 1 👀</div>
+        <div class="dc-shot"><span class="dc-chat">[Clan] Donini: Wyvern37</span></div>
+        <div class="dc-reacts"><span class="dc-react">✅ 1</span><span class="dc-react on">🎯 1</span></div>
+      </div>
+    </div>
+    <div class="dc-msg">
+      <div class="dc-av av-bot">M</div>
+      <div class="dc-body">
+        <div class="dc-name"><b>Myriad Events Bot</b><span class="dc-app">APP</span><span class="dc-time">Tue 21:12 UTC</span></div>
+        <div>Approved by <b style="color:#E67E22">Emo Jess</b>. <b>Donini</b>: part 1 of 2 done for the Araxxor bounty. One more to go!</div>
+      </div>
+    </div>
+  </div>
+  <p class="note">If an admin approves by mistake, <span class="cmd">/bhvoid</span> undoes it and takes the points back. There is no reject button. Admins just don't react, the same as now.</p>
+</section>
+
+<!-- AWARDS -->
+<section id="awards">
+  <div class="sec-head">
+    <span class="eyebrow">#bounty-awards</span>
+    <h2>The awards channel</h2>
+    <p>Only the bot posts here. It announces each completed claim, each new bounty, and the monthly winners.</p>
+  </div>
+  <div class="dc">
+    <div class="dc-chan"># <b>bounty-awards</b></div>
+    <div class="dc-msg">
+      <div class="dc-av av-bot">M</div>
+      <div class="dc-body">
+        <div class="dc-name"><b>Myriad Events Bot</b><span class="dc-app">APP</span><span class="dc-time">Fri 19:42 UTC</span></div>
+        <div class="dc-embed">
+          <div class="dc-etitle">🥇 First claim! 1Shylybored takes the Araxxor bounty</div>
+          <div class="dc-edesc"><b>+20 points</b> (10 × 2 multiplier). The bounty stays open for 5 points per player until Monday.</div>
+          <div class="dc-foot">1Shylybored · wallet 45 · earned 85 · #2 this month</div>
+        </div>
+      </div>
+    </div>
+    <div class="dc-msg">
+      <div class="dc-av av-bot">M</div>
+      <div class="dc-body">
+        <div class="dc-name"><b>Myriad Events Bot</b><span class="dc-app">APP</span><span class="dc-time">Sat 11:03 UTC</span></div>
+        <div class="dc-embed green">
+          <div class="dc-edesc">✅ <b>Valxen</b> completed the Araxxor bounty · <b>+5 points</b> (claim 2)</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- COMMANDS -->
+<section id="commands">
+  <div class="sec-head">
+    <span class="eyebrow">Slash commands</span>
+    <h2>Commands</h2>
+    <p>Answers to player commands are private by default, so only the person who asked sees them. Nobody spams the channel.</p>
+  </div>
+  <dl class="cmd-list">
+    <div class="sub">For everyone</div>
+    <dt>/bhbounty</dt><dd>This week's bounty, how long is left, who has claimed it, and your own progress on each part.</dd>
+    <dt>/bhme</dt><dd>Your wallet, points earned, rank this month and all time, and your last claims.</dd>
+    <dt>/bhtop</dt><dd>Leaderboard. Choose <code>month</code> or <code>all-time</code>.</dd>
+    <dt>/bhshop</dt><dd>What you can buy and what it costs.</dd>
+    <dt>/bhbuy</dt><dd>Spend wallet points on a shop item. Asks you to confirm first.</dd>
+    <dt>/bhpast</dt><dd>Earlier bounties and who claimed them first.</dd>
+    <div class="sub">Admins only</div>
+    <dt>/bhvoid</dt><dd>Undo a wrong approval and take the points back.</dd>
+    <dt>/bhgive</dt><dd>Add or remove points by hand, with a reason. Logged in the sheet.</dd>
+    <dt>/bhpost</dt><dd>Post next week's bounty now, without waiting for Monday.</dd>
+    <dt>/bhreload</dt><dd>Re-read the Google Sheet after editing bounties or the shop.</dd>
+  </dl>
+
+  <div class="grid-2">
+    <div class="dc">
+      <div class="dc-msg">
+        <div class="dc-used"><b>Donini</b> used <span class="slash">/bhbounty</span></div>
+        <div class="dc-av av-bot">M</div>
+        <div class="dc-body">
+          <div class="dc-name"><b>Myriad Events Bot</b><span class="dc-app">APP</span></div>
+          <div class="dc-embed">
+            <div class="dc-etitle">Araxxor · your progress</div>
+            <div class="dc-bar"><span style="width:50%"></span></div>
+            <div class="dc-edesc">🔑 Code word: <b>Wyvern37</b> (must be visible in each screenshot)</div>
+            <div class="dc-edesc">✅ Part 1 · Araxxi leg piece (Tue)<br>⬜ Part 2 · Araxxi's eye, fang or web</div>
+            <div class="dc-edesc">First claim is <b>taken</b>. Finish part 2 for <b>5 pts</b>.<br>Time left: <b>2 days 2 hours</b></div>
+          </div>
+          <div class="dc-eph">👁 Only you can see this · <a href="#commands">Dismiss message</a></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="dc">
+      <div class="dc-msg">
+        <div class="dc-used"><b>Valxen</b> used <span class="slash">/bhme</span></div>
+        <div class="dc-av av-bot">M</div>
+        <div class="dc-body">
+          <div class="dc-name"><b>Myriad Events Bot</b><span class="dc-app">APP</span></div>
+          <div class="dc-embed blurple">
+            <div class="dc-etitle">Valxen · Bounty Hunter</div>
+            <div class="dc-fields">
+              <div class="dc-field"><div class="dc-fname">💰 Wallet</div>10 pts</div>
+              <div class="dc-field"><div class="dc-fname">⭐ Earned</div>135 pts</div>
+              <div class="dc-field"><div class="dc-fname">November</div>#1 · 40 pts</div>
+              <div class="dc-field"><div class="dc-fname">All time</div>#1 · 135 pts</div>
+              <div class="dc-field"><div class="dc-fname">Bounties</div>14 claimed · 4 first</div>
+              <div class="dc-field"><div class="dc-fname">Streak</div>5 weeks</div>
+            </div>
+            <div class="dc-edesc"><b>Recent</b><br>W47 Araxxor · +5<br>W46 Kerapac · +20 🥇 ×2<br>W45 Vorago · +5</div>
+          </div>
+          <div class="dc-eph">👁 Only you can see this · <a href="#commands">Dismiss message</a></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- LEADERBOARD -->
+<section id="leaderboard">
+  <div class="sec-head">
+    <span class="eyebrow">Leaderboards</span>
+    <h2>This month and all time</h2>
+    <p>Both boards rank by points <strong>earned</strong>, not wallet, so spending in the shop never drops anyone down. The monthly board resets on the 1st at 00:00 UTC. The bot can also keep a live copy pinned in <span class="cmd">#bounty-awards</span>.</p>
+  </div>
+  <div class="tabs" role="tablist" aria-label="Leaderboard period">
+    <button role="tab" id="tab-l1" aria-selected="true" data-group="lb" data-show="lb-1">/bhtop month</button>
+    <button role="tab" id="tab-l2" aria-selected="false" data-group="lb" data-show="lb-2">/bhtop all-time</button>
+  </div>
+
+  <div class="dc" data-panel="lb" id="lb-1">
+    <div class="dc-msg">
+      <div class="dc-used"><b>Diodegro</b> used <span class="slash">/bhtop</span> period: month</div>
+      <div class="dc-av av-bot">M</div>
+      <div class="dc-body">
+        <div class="dc-name"><b>Myriad Events Bot</b><span class="dc-app">APP</span></div>
+        <div class="dc-embed">
+          <div class="dc-etitle">🏆 Bounty Hunters · November 2026</div>
+          <div class="dc-block"> #  Hunter        Pts  Claims  1st
+ 🥇 Valxen         40      3    1
+ 🥈 1Shylybored    35      3    1
+ 🥉 Diodegro       15      3    0
+ 4  Donini         10      1    1
+ 5  HellDraconic    5      1    0
+ 6  Tune O          5      1    0</div>
+          <div class="dc-foot">Resets 1 Dec 00:00 UTC · 6 hunters scored this month · You: #3</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="dc" data-panel="lb" id="lb-2" hidden>
+    <div class="dc-msg">
+      <div class="dc-used"><b>Diodegro</b> used <span class="slash">/bhtop</span> period: all-time</div>
+      <div class="dc-av av-bot">M</div>
+      <div class="dc-body">
+        <div class="dc-name"><b>Myriad Events Bot</b><span class="dc-app">APP</span></div>
+        <div class="dc-embed">
+          <div class="dc-etitle">🏆 Bounty Hunters · All time</div>
+          <div class="dc-block"> #  Hunter        Pts  Claims  1st
+ 🥇 Valxen        135     14    4
+ 🥈 1Shylybored   120     13    3
+ 🥉 Donini         85      9    3
+ 4  Diodegro       70     12    0
+ 5  HellDraconic   45      6    1
+ 6  Tune O         25      4    0</div>
+          <div class="dc-foot">Since week 1 · 23 hunters in total · You: #4</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p class="note">All names and numbers here are made-up examples.</p>
+</section>
+
+<!-- SHOP -->
+<section id="shop">
+  <div class="sec-head">
+    <span class="eyebrow">Spending points</span>
+    <h2>The shop</h2>
+    <p>The items are still to be decided. The ones below only show how it would work. Admins manage the list in the Google Sheet (name, price, stock, active). Most rewards are delivered by hand, so each purchase pings the admins to deliver it.</p>
+  </div>
+  <div class="grid-2">
+    <div class="dc">
+      <div class="dc-msg">
+        <div class="dc-used"><b>1Shylybored</b> used <span class="slash">/bhshop</span></div>
+        <div class="dc-av av-bot">M</div>
+        <div class="dc-body">
+          <div class="dc-name"><b>Myriad Events Bot</b><span class="dc-app">APP</span></div>
+          <div class="dc-embed">
+            <div class="dc-etitle">🛒 Bounty Shop</div>
+            <div class="dc-edesc">Your wallet: <b>45 pts</b></div>
+            <div class="dc-block">Item                         Cost  Stock
+1  Bond raffle ticket          15   ∞
+2  Custom role colour (30d)    25   ∞
+3  Pick next week's bounty     40   1
+4  Clan citadel shout-out      10   ∞
+5  1M GP from clan bank        60   3 left</div>
+            <div class="dc-foot">Buy with /bhbuy · Example items only</div>
+          </div>
+          <div class="dc-eph">👁 Only you can see this · <a href="#shop">Dismiss message</a></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="dc">
+      <div class="dc-msg">
+        <div class="dc-used"><b>1Shylybored</b> used <span class="slash">/bhbuy</span> item: Custom role colour (30d)</div>
+        <div class="dc-av av-bot">M</div>
+        <div class="dc-body">
+          <div class="dc-name"><b>Myriad Events Bot</b><span class="dc-app">APP</span></div>
+          <div class="dc-embed blurple">
+            <div class="dc-etitle">Confirm purchase</div>
+            <div class="dc-edesc">Custom role colour (30 days)<br>Cost <b>25 pts</b> · wallet after: <b>20 pts</b><br>Your earned points and rank stay the same.</div>
+          </div>
+          <div class="dc-btns"><span class="dc-btn go">Buy for 25 pts</span><span class="dc-btn">Cancel</span></div>
+          <div class="dc-eph">👁 Only you can see this · <a href="#shop">Dismiss message</a></div>
+        </div>
+      </div>
+      <div class="dc-msg">
+        <div class="dc-av av-bot">M</div>
+        <div class="dc-body">
+          <div class="dc-name"><b>Myriad Events Bot</b><span class="dc-app">APP</span><span class="dc-time">in #admin-shop</span></div>
+          <div class="dc-embed red">
+            <div class="dc-edesc">🛒 <b>1Shylybored</b> bought <b>Custom role colour (30d)</b> for 25 pts. React ✅ when delivered.</div>
+          </div>
+          <div class="dc-reacts"><span class="dc-react">✅ 1</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- QUESTIONS -->
+<section id="questions">
+  <div class="sec-head">
+    <span class="eyebrow">Your input</span>
+    <h2>Questions for the admin team</h2>
+    <p>Answers to these decide how the bot is built. Anything not answered stays as shown above.</p>
+  </div>
+  <ol class="qs">
+    <li><b>Point values</b><span>Is 10 for the first claim and 5 for later claims right? Should harder bosses pay more (set per bounty)?</span></li>
+    <li><b>Multi-part bounties</b><span>Points only when every part is done (as shown), or a few points per part as well?</span></li>
+    <li><b>Multiplier</b><span>Only ×2 after 72 hours, or should it keep growing (for example ×3 after 5 days)? Any multiplier for later claims?</span></li>
+    <li><b>Late claims</b><span>Can someone still claim last week's bounty after the new one is posted (for example within 24 hours), or does it close right away?</span></li>
+    <li><b>Leaderboards</b><span>Is "this month" and "all time" enough, or do we also want "this year"? Should the monthly winner get a prize?</span></li>
+    <li><b>Shop</b><span>Which items, what prices, limited stock or not, and which admins deliver them?</span></li>
+    <li><b>Who picks the bosses</b><span>Admins fill a list in the sheet in advance, or the bot picks at random from a pool?</span></li>
+    <li><b>Code word</b><span>Is "typed in your in-game chat" the right rule, or should it be somewhere specific (for example clan chat only)? Should the bot pick it, or do admins want to choose each week's word?</span></li>
+    <li><b>Visibility</b><span>Should partial progress be public on the pinned post ("2 hunters have 1 of 2 parts") or private to each player?</span></li>
+  </ol>
+</section>
+
+<footer>
+  Proposal by Diodegro for the Myriad clan admin team · November 2026 · All screenshots are mockups, names and numbers are examples.
+</footer>
+
+</div>
+
+<script>
+(function () {
+  document.querySelectorAll('.tabs button').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var group = btn.dataset.group;
+      document.querySelectorAll('.tabs button[data-group="' + group + '"]').forEach(function (b) {
+        b.setAttribute('aria-selected', b === btn ? 'true' : 'false');
+      });
+      document.querySelectorAll('[data-panel="' + group + '"]').forEach(function (p) {
+        p.hidden = p.id !== btn.dataset.show;
+      });
+    });
+  });
+})();
+</script>

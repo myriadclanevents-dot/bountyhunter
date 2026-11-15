@@ -1,0 +1,8 @@
+# Keep secrets and local-only files out of the image.
+# On Fly, settings come from `fly secrets`, not .env.
+.env
+node_modules
+test
+*.log
+.git
+bot.log

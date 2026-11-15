@@ -1,0 +1,18 @@
+{
+  "name": "bounty-hunter",
+  "version": "0.1.0",
+  "description": "Myriad clan Bounty Hunter: weekly boss bounties, points, shop and leaderboards, driven by a Google Sheet",
+  "main": "index.js",
+  "private": true,
+  "scripts": {
+    "start": "node index.js",
+    "test": "node test/bounty.test.js && node test/embeds.test.js"
+  },
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "discord.js": "^14.25.1",
+    "dotenv": "^17.4.2",
+    "fuse.js": "^7.5.0"
+  }
+}

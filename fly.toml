@@ -1,0 +1,13 @@
+# Fly.io config for the always-on Bounty Hunter bot.
+# Worker only (Discord gateway, outbound) — no [http_service], no ports.
+app = "myri-bounty-bot"
+primary_region = "lhr"
+
+[build]
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"
+
+[deploy]
+  strategy = "immediate"
