@@ -108,6 +108,10 @@ test('help: explains the flow, admin commands only for admins', () => {
   assert.match(e.helpEmbed(s, { admin: true }).fields.map(f => f.value).join('\n'), /\/bhvoid/);
   assert.doesNotMatch(e.helpEmbed(b.readSettings({ Multiplier: 1 })).fields[1].value, /×/);
   assert.match(text, /the bounty board/); // no channel set: plain words, not a broken link
+  const pinned = e.helpEmbed(s, { pinned: true });
+  assert.equal(pinned.title, e.GUIDE_TITLE);
+  assert.match(pinned.footer.text, /\/bhhelp any time/);
+  assert.ok(!pinned.fields.some(f => /Admin/.test(f.name)));
 });
 
 test('pinned post and announcements link channels and mention /bhhelp', () => {

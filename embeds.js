@@ -311,7 +311,9 @@ function pastEmbed(rows) {
 }
 
 /** /bhhelp — how Bounty Hunter works, step by step. Admin section only for admins. */
-function helpEmbed(settings, { admin = false } = {}) {
+const GUIDE_TITLE = '🎯 Bounty Hunter — how it works';
+
+function helpEmbed(settings, { admin = false, pinned = false } = {}) {
   const board = chan(settings.boardChannelId, 'the bounty board');
   const subs = chan(settings.submissionsChannelId, 'the submissions channel');
   const awards = chan(settings.awardsChannelId, 'the awards channel');
@@ -356,7 +358,7 @@ function helpEmbed(settings, { admin = false } = {}) {
   ];
   return {
     color: GOLD,
-    title: '🎯 Bounty Hunter — how it works',
+    title: GUIDE_TITLE,
     description: 'A new boss bounty every week. Get the drops, post a screenshot, earn points, spend them in the shop.',
     fields: [
       { name: '📋 How to take part', value: clip(steps.join('\n')) },
@@ -365,12 +367,12 @@ function helpEmbed(settings, { admin = false } = {}) {
       { name: '⌨️ Commands', value: player.join('\n') },
       ...(admin ? [{ name: '🛠️ Admin only', value: clip(adminCmds.join('\n')) }] : [])
     ],
-    footer: { text: 'Only you can see this message' }
+    footer: { text: pinned ? 'Type /bhhelp any time to see this guide again' : 'Only you can see this message' }
   };
 }
 
 module.exports = {
   ts, weekLabel, bountyView, boardEmbed, progressEmbed, claimEmbed, multiplierEmbed, newBountyEmbed,
   table, leaderboardEmbed, monthlyWinnersEmbed, meEmbed, shopEmbed, confirmBuyEmbed, adminPurchaseEmbed, pastEmbed,
-  wheelOddsText, spinFrameEmbed, adminLogEmbed, helpEmbed
+  wheelOddsText, spinFrameEmbed, adminLogEmbed, helpEmbed, GUIDE_TITLE
 };

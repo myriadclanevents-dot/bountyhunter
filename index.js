@@ -165,6 +165,34 @@ function viewFor(bounty, at = now()) {
 const lastRendered = new Map();
 
 /** Re-renders the open bounty posts (and the one just closed), editing only what changed. */
+/**
+ * Keeps ONE pinned "how it works" guide in the board channel: finds the bot's
+ * own pinned guide and edits it if the text changed, else posts + pins a new one.
+ */
+let lastGuide = '';
+async function ensureGuide() {
+  const channel = await fetchChannel(S().boardChannelId);
+  if (!channel) return;
+  const embed = e.helpEmbed(S(), { pinned: true });
+  const json = JSON.stringify(embed);
+  if (json === lastGuide) return;
+  try {
+    const pins = await channel.messages.fetchPins();
+    const old = pins.items.map(p => p.message)
+      .find(m => m.author?.id === client.user.id && m.embeds[0]?.title === e.GUIDE_TITLE);
+    if (old) {
+      await old.edit({ embeds: [embed], allowedMentions: NO_PINGS });
+    } else {
+      const msg = await channel.send({ embeds: [embed], allowedMentions: NO_PINGS });
+      await msg.pin();
+      console.log('📌 Posted and pinned the Bounty Hunter guide.');
+    }
+    lastGuide = json;
+  } catch (err) {
+    console.error(`⚠️ Could not post/pin the guide (needs Pin Messages + Read History): ${err.message}`);
+  }
+}
+
 async function refreshBoards() {
   const s = S();
   const posted = b.postedBounties(sheet.getBounties());
@@ -526,7 +554,7 @@ const handlers = {
     await i.deferReply({ flags: MessageFlags.Ephemeral });
     const ok = await sheet.loadAll();
     lastRendered.clear();
-    if (ok) await refreshBoards();
+    if (ok) { await refreshBoards(); lastGuide = ''; await ensureGuide(); }
     const warns = sheet.warnings();
     return i.editReply({ content: ok
       ? `✅ Sheet re-read. ${sheet.getBounties().length} bounties, ${sheet.getShop().length} shop items.${warns.length ? `\n⚠️ ${warns.slice(0, 5).join('\n⚠️ ')}` : ''}`
@@ -790,10 +818,11 @@ client.once(Events.ClientReady, async () => {
   if (thisWeek && !thisWeek.postedAt) console.log(`🗓️ This week's bounty (${thisWeek.boss}) is due ${new Date(b.scheduledPostTime(week, s)).toISOString()}.`);
 
   await refreshBoards();
+  await ensureGuide();
   setInterval(tick, 60 * 1000);
   tick();
   setInterval(() => ensureCommands({ quiet: true }), 5 * 60 * 1000);
-  setInterval(async () => { if (await sheet.refreshConfig()) await refreshBoards(); }, 5 * 60 * 1000);
+  setInterval(async () => { if (await sheet.refreshConfig()) { await refreshBoards(); await ensureGuide(); } }, 5 * 60 * 1000);
 });
 
 client.on(Events.Error, err => console.error(`❌ Discord client error: ${err.message}`));
