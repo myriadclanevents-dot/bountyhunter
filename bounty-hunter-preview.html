@@ -194,6 +194,7 @@ footer { color: var(--muted); font-size: 0.85rem; border-top: 1px solid var(--li
     <a href="#submit">Submitting</a>
     <a href="#awards">Awards channel</a>
     <a href="#commands">Commands</a>
+    <a href="#help">Help &amp; guide</a>
     <a href="#leaderboard">Leaderboards</a>
     <a href="#shop">Shop</a>
     <a href="#questions">Questions for admins</a>
@@ -306,7 +307,7 @@ footer { color: var(--muted); font-size: 0.85rem; border-top: 1px solid var(--li
         <div class="dc-embed">
           <div class="dc-ehead">🎯 BOUNTY · WEEK 47</div>
           <div class="dc-etitle">Araxxor</div>
-          <div class="dc-edesc">Post a screenshot of each drop in <span style="color:var(--dc-link)">#bounty-submissions</span>. The <b>code word</b> must be visible in the screenshot. Both parts are needed to claim.</div>
+          <div class="dc-edesc"><b>How to claim:</b><br>1. Get the drops for <b>all 2 parts</b> below.<br>2. Screenshot it with the <b>code word</b> visible in your chat.<br>3. Post the screenshot in <span style="color:var(--dc-link)">#bounty-submissions</span> and <b>type the item name</b> in the same message.<br>4. Wait for an approver to react ✅. Done!<br>Type <b>/bhhelp</b> if you're unsure.</div>
           <div class="dc-code">🔑 Code word: <b>Wyvern37</b><br>Type it in your in-game chat so it shows in every screenshot. No code word, no approval.</div>
           <div class="dc-fields">
             <div class="dc-field"><div class="dc-fname">Part 1</div>Any Araxxi leg piece</div>
@@ -318,7 +319,7 @@ footer { color: var(--muted); font-size: 0.85rem; border-top: 1px solid var(--li
             <div class="dc-field"><div class="dc-fname">×2 multiplier</div>Thu 14:00 UTC if still unclaimed</div>
           </div>
           <div class="dc-field"><div class="dc-fname">Claimed by (0)</div>Nobody yet. Be first!</div>
-          <div class="dc-foot">Ends Mon 24 Nov when the next bounty is posted · /bhbounty for your progress</div>
+          <div class="dc-foot">Ends Mon 24 Nov when the next bounty is posted · /bhbounty for your progress · ❓ New to bounties? Type /bhhelp</div>
         </div>
       </div>
     </div>
@@ -345,7 +346,7 @@ footer { color: var(--muted); font-size: 0.85rem; border-top: 1px solid var(--li
             <div class="dc-field"><div class="dc-fname">In progress</div>2 hunters have 1 of 2 parts</div>
           </div>
           <div class="dc-field"><div class="dc-fname">Claimed by (0)</div>Nobody yet.</div>
-          <div class="dc-foot">Ends Mon 24 Nov when the next bounty is posted · /bhbounty for your progress</div>
+          <div class="dc-foot">Ends Mon 24 Nov when the next bounty is posted · /bhbounty for your progress · ❓ New to bounties? Type /bhhelp</div>
         </div>
       </div>
     </div>
@@ -368,7 +369,7 @@ footer { color: var(--muted); font-size: 0.85rem; border-top: 1px solid var(--li
           </div>
           <div class="dc-field"><div class="dc-fname">Claimed by (3)</div>🥇 1Shylybored · +20<br>2. Valxen · +5<br>3. Diodegro · +5</div>
           <div class="dc-field"><div class="dc-fname">In progress</div>1 hunter has 1 of 2 parts</div>
-          <div class="dc-foot">Ends Mon 24 Nov when the next bounty is posted · /bhbounty for your progress</div>
+          <div class="dc-foot">Ends Mon 24 Nov when the next bounty is posted · /bhbounty for your progress · ❓ New to bounties? Type /bhhelp</div>
         </div>
       </div>
     </div>
@@ -457,6 +458,7 @@ footer { color: var(--muted); font-size: 0.85rem; border-top: 1px solid var(--li
     <dt>/bhshop</dt><dd>What you can buy and what it costs.</dd>
     <dt>/bhbuy</dt><dd>Spend wallet points on a shop item. Asks you to confirm first.</dd>
     <dt>/bhpast</dt><dd>Earlier bounties and who claimed them first.</dd>
+    <dt>/bhhelp</dt><dd>Step-by-step guide: how to take part, points, common mistakes and all commands. Admins also see the admin commands.</dd>
     <div class="sub">Admins only</div>
     <dt>/bhvoid</dt><dd>Undo a wrong approval and take the points back.</dd>
     <dt>/bhgive</dt><dd>Add or remove points by hand, with a reason. Logged in the sheet.</dd>
@@ -506,6 +508,39 @@ footer { color: var(--muted); font-size: 0.85rem; border-top: 1px solid var(--li
       </div>
     </div>
   </div>
+</section>
+
+<!-- HELP -->
+<section id="help">
+  <div class="sec-head">
+    <span class="eyebrow">New players</span>
+    <h2>Help and the pinned guide</h2>
+    <p>Nobody has to ask how it works. The bot keeps <strong>one pinned guide</strong> in <span class="cmd">#bounty-board</span>, and anyone can type <span class="cmd">/bhhelp</span> to see the same guide privately. Every bounty post, announcement and "something's wrong" reply from the bot points to <span class="cmd">/bhhelp</span>.</p>
+  </div>
+  <div class="rules">
+    <div class="rule"><strong>Always up to date</strong><p>Points, hours and channel links come from the Google Sheet. Change a setting and the pinned guide updates itself within 5 minutes (or right away with <span class="cmd">/bhreload</span>).</p></div>
+    <div class="rule"><strong>Never duplicated</strong><p>The bot edits its own guide in place. If someone unpins or deletes it, a fresh one is pinned on the next restart or <span class="cmd">/bhreload</span>.</p></div>
+    <div class="rule"><strong>Admin extras</strong><p>When an admin types <span class="cmd">/bhhelp</span>, they also get a 🛠️ Admin only section: how to approve, what to do after a ❓ reply, and the admin commands.</p></div>
+  </div>
+  <div class="dc">
+    <div class="dc-chan"># <b>bounty-board</b> <span class="dc-pin">📌 Pinned</span></div>
+    <div class="dc-msg">
+      <div class="dc-av av-bot">M</div>
+      <div class="dc-body">
+        <div class="dc-name"><b>Myriad Events Bot</b><span class="dc-app">APP</span></div>
+        <div class="dc-embed">
+          <div class="dc-etitle">🎯 Bounty Hunter — how it works</div>
+          <div class="dc-edesc">A new boss bounty every week. Get the drops, post a screenshot, earn points, spend them in the shop.</div>
+          <div class="dc-field"><div class="dc-fname">📋 How to take part</div><b>1.</b> Every <b>Monday</b> (random hour, UTC) a new boss bounty is posted and pinned in <span style="color:var(--dc-link)">#bounty-board</span>. Or type <b>/bhbounty</b>.<br><b>2.</b> Get the drop(s) it asks for. Some bounties have several parts: you need <b>all</b> of them.<br><b>3.</b> Take a screenshot of the drop. If the bounty has a 🔑 <b>code word</b>, type it in your in-game chat first so it shows in the screenshot.<br><b>4.</b> Post the screenshot in <span style="color:var(--dc-link)">#bounty-submissions</span> and <b>type the item name in the same message</b>.<br><b>5.</b> Wait for an approver to react ✅. The bot reacts 🎯 and replies with your progress.<br><b>6.</b> All parts done = bounty claimed!</div>
+          <div class="dc-field"><div class="dc-fname">🏆 Points</div>🥇 <b>First</b> player to finish: <b>10 pts</b>. Everyone after: <b>5 pts</b>.<br>🔥 Nobody finished after <b>72 hours</b>? The first claim becomes <b>×2</b>.<br>You can claim each bounty <b>once</b>.<br>💰 <b>Wallet</b> = points you can spend. <b>Earned</b> = all points you ever got (leaderboards use this).</div>
+          <div class="dc-field"><div class="dc-fname">⚠️ Common mistakes</div>❌ No item name in the message → <b>edit your message</b> and add it, then an approver re-checks it.<br>❌ Code word not visible → post a new screenshot with it showing.<br>❌ Screenshot from before the bounty went up → it can't count.<br>❌ Posted somewhere else → it only counts in <span style="color:var(--dc-link)">#bounty-submissions</span>.<br>⏳ No reaction yet? Approvers are people, give them some time. Don't delete your post.</div>
+          <div class="dc-field"><div class="dc-fname">⌨️ Commands</div><code>/bhbounty</code> <code>/bhme</code> <code>/bhtop</code> <code>/bhshop</code> <code>/bhbuy</code> <code>/bhpast</code> <code>/bhhelp</code>, each with a one-line explanation</div>
+          <div class="dc-foot">Type /bhhelp any time to see this guide again</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p class="note">Shortened mockup. The live guide is already pinned in the bounty board channel.</p>
 </section>
 
 <!-- LEADERBOARD -->
