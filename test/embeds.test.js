@@ -102,11 +102,27 @@ test('help: explains the flow, admin commands only for admins', () => {
   const text = player.fields.map(f => f.value).join('\n');
   assert.match(text, /<#42>/);
   assert.match(text, /\*\*20 pts\*\*/);
-  assert.match(text, /\*\*48 h\*\*.*×3/);
+  assert.match(text, /\*\*48 hours\*\*.*×3/);
   assert.match(text, /\/bhbuy/);
   assert.doesNotMatch(text, /\/bhvoid/);
   assert.match(e.helpEmbed(s, { admin: true }).fields.map(f => f.value).join('\n'), /\/bhvoid/);
-  assert.doesNotMatch(e.helpEmbed(b.readSettings({ Multiplier: 1 })).fields[0].value, /×/);
+  assert.doesNotMatch(e.helpEmbed(b.readSettings({ Multiplier: 1 })).fields[1].value, /×/);
+  assert.match(text, /the bounty board/); // no channel set: plain words, not a broken link
+});
+
+test('pinned post and announcements link channels and mention /bhhelp', () => {
+  const s = b.readSettings({ Submissions_Channel_ID: '42', Board_Channel_ID: '7' });
+  const bounty = { weekOf: '2026-11-16', boss: 'Kerapac', parts: [{ need: 1, sources: [{ boss: 'Kerapac' }] }], codeWord: 'APPLE', postedAt: 0 };
+  const view = e.bountyView(bounty, { claims: [], inProgress: 0, settings: s, now: 0, closed: false });
+  const board = e.boardEmbed(bounty, view, s);
+  assert.match(board.description, /<#42>/);
+  assert.match(board.description, /\/bhhelp/);
+  assert.match(board.footer.text, /\/bhhelp/);
+  const ann = e.newBountyEmbed(bounty, null, s);
+  assert.match(ann.description, /<#7>/);
+  assert.match(ann.description, /<#42>/);
+  assert.match(ann.footer.text, /\/bhhelp/);
+  assert.match(e.multiplierEmbed(bounty, s, 20).description, /<#7>.*<#42>/);
 });
 
 console.log(`embeds: ${passed} tests passed`);

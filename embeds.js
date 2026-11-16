@@ -13,6 +13,8 @@ const GREY = 0x80848E;
 
 const ts = (ms, style = 'f') => `<t:${Math.floor(ms / 1000)}:${style}>`;
 const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+const chan = (id, fallback) => (id ? `<#${id}>` : fallback);
+const HELP_HINT = '❓ New to bounties? Type /bhhelp';
 const clip = (text, max = 1024) => (text.length > max ? `${text.slice(0, max - 1)}…` : text);
 
 function weekLabel(weekOf) {
@@ -55,10 +57,13 @@ function boardEmbed(bounty, view, settings) {
   let color = GOLD;
   let status = '';
   let description;
-  const subs = settings.submissionsChannelId ? `<#${settings.submissionsChannelId}>` : 'the submissions channel';
-  const howTo = `Post a screenshot of each drop in ${subs} with the item name in the message. ` +
-    'The **code word** must be visible in the screenshot.' +
-    (bounty.parts.length > 1 ? ` All ${bounty.parts.length} parts are needed to claim.` : '');
+  const subs = chan(settings.submissionsChannelId, 'the submissions channel');
+  const howTo = '**How to claim:**\n' +
+    `1. Get the drop${bounty.parts.length > 1 ? `s for **all ${bounty.parts.length} parts** below` : ' below'}.\n` +
+    `2. Screenshot it${bounty.codeWord ? ' with the **code word** visible in your chat' : ''}.\n` +
+    `3. Post the screenshot in ${subs} and **type the item name** in the same message.\n` +
+    `4. Wait for an approver to react ${settings.approveEmoji}. Done!\n` +
+    "Type **/bhhelp** if you're unsure.";
 
   if (view.closed) {
     color = GREY;
@@ -100,7 +105,7 @@ function boardEmbed(bounty, view, settings) {
     title: `${bounty.boss}${status}`,
     description,
     fields,
-    footer: { text: 'Ends when the next bounty is posted · /bhbounty shows your progress' }
+    footer: { text: `Ends when the next bounty is posted · /bhbounty = your progress · ${HELP_HINT}` }
   };
 }
 
@@ -156,17 +161,21 @@ function multiplierEmbed(bounty, settings, firstNow) {
   return {
     color: RED,
     title: `🔥 ×${settings.multiplier} is now active on the ${bounty.boss} bounty`,
-    description: `Nobody has claimed it in ${settings.multiplierAfterHours} hours. The **first claim is now worth ${firstNow} points**.`
+    description: `Nobody has claimed it in ${settings.multiplierAfterHours} hours. The **first claim is now worth ${firstNow} points**.\n` +
+      `Details: ${chan(settings.boardChannelId, 'the bounty board')} · Post screenshots in ${chan(settings.submissionsChannelId, 'the submissions channel')}`,
+    footer: { text: HELP_HINT }
   };
 }
 
-function newBountyEmbed(bounty, boardUrl) {
+function newBountyEmbed(bounty, boardUrl, settings = {}) {
   return {
     color: GOLD,
     title: `🎯 New bounty: ${bounty.boss}`,
-    description: `This week's bounty is up${boardUrl ? `: ${boardUrl}` : ''}.` +
+    description: `This week's bounty is up${boardUrl ? `: ${boardUrl}` : ` in ${chan(settings.boardChannelId, 'the bounty board')}`}.` +
       (bounty.codeWord ? `\n🔑 Code word: **${bounty.codeWord}**. Have it visible in your screenshots.` : '') +
-      ' Good luck, hunters!'
+      `\n📸 Post your screenshots in ${chan(settings.submissionsChannelId, 'the submissions channel')} with the item name in the message.` +
+      '\nGood luck, hunters!',
+    footer: { text: HELP_HINT }
   };
 }
 
@@ -301,40 +310,60 @@ function pastEmbed(rows) {
   };
 }
 
-/** /bhhelp — how Bounty Hunter works + the commands. Admin section only for admins. */
+/** /bhhelp — how Bounty Hunter works, step by step. Admin section only for admins. */
 function helpEmbed(settings, { admin = false } = {}) {
-  const ch = id => (id ? `<#${id}>` : 'the submissions channel');
-  const howTo = [
-    `1. A new boss bounty goes up every **Monday** at a random hour (UTC) in ${settings.boardChannelId ? `<#${settings.boardChannelId}>` : 'the bounty board'}.`,
-    `2. Get the drop(s), then post a **screenshot** in ${ch(settings.submissionsChannelId)} with the **item name in the message** (and the code word visible, if the bounty has one).`,
-    `3. An approver reacts ${settings.approveEmoji}. The bot reacts 🎯 and tells you your progress.`,
-    `4. Finish every part to claim: first claim **${settings.defaultFirst} pts**, later claims **${settings.defaultLater} pts** (one claim per player; some bounties pay more).`,
+  const board = chan(settings.boardChannelId, 'the bounty board');
+  const subs = chan(settings.submissionsChannelId, 'the submissions channel');
+  const awards = chan(settings.awardsChannelId, 'the awards channel');
+  const steps = [
+    `**1.** Every **Monday** (random hour, UTC) a new boss bounty is posted and pinned in ${board}. Or type **/bhbounty**.`,
+    '**2.** Get the drop(s) it asks for. Some bounties have several parts: you need **all** of them.',
+    '**3.** Take a screenshot of the drop. If the bounty has a 🔑 **code word**, type it in your in-game chat first so it shows in the screenshot.',
+    `**4.** Post the screenshot in ${subs} and **type the item name in the same message** (example: \`Spider leg top\`).`,
+    `**5.** Wait for an approver to react ${settings.approveEmoji}. The bot reacts 🎯 and replies with your progress.`,
+    `**6.** All parts done = bounty claimed! Claims are announced in ${awards}.`
+  ];
+  const points = [
+    `🥇 **First** player to finish: **${settings.defaultFirst} pts**. Everyone after: **${settings.defaultLater} pts** (some bounties pay more, see the pinned post).`,
     ...(settings.multiplier > 1
-      ? [`5. Nobody claimed it after **${settings.multiplierAfterHours} h**? The first claim becomes **×${settings.multiplier}**.`] : [])
+      ? [`🔥 Nobody finished after **${settings.multiplierAfterHours} hours**? The first claim becomes **×${settings.multiplier}**.`] : []),
+    'You can claim each bounty **once**. You have until the next bounty is posted.',
+    '💰 **Wallet** = points you can spend in the shop. **Earned** = all points you ever got (the leaderboard uses this, so spending never hurts your rank).'
+  ];
+  const mistakes = [
+    '❌ No item name in the message → **edit your message** and add it, then an approver re-checks it. No need to post again.',
+    '❌ Code word not visible → post a new screenshot with it showing.',
+    '❌ Screenshot from before the bounty went up → it can\'t count.',
+    `❌ Posted somewhere else → it only counts in ${subs}.`,
+    '⏳ No reaction yet? Approvers are people, give them some time. Don\'t delete your post.'
   ];
   const player = [
-    '`/bhbounty` — this week\'s bounty and your progress',
-    '`/bhme` — your wallet, points earned and rank (or someone else\'s)',
+    '`/bhbounty` — this week\'s bounty + **your progress**',
+    '`/bhme` — your wallet, points and rank (add a player to look someone up)',
     '`/bhtop` — leaderboard (this month or all time)',
     '`/bhshop` — what you can buy with points',
-    '`/bhbuy` — spend points in the shop',
+    '`/bhbuy` — buy something from the shop',
     '`/bhpast` — earlier bounties and who claimed them first',
-    '`/bhhelp` — this message'
+    '`/bhhelp` — this guide'
   ];
   const adminCmds = [
-    '`/bhvoid` — undo an approved submission (message link + reason)',
-    '`/bhgive` — add or remove points by hand (with a reason)',
+    `To approve: react ${settings.approveEmoji} on the player's post. If the bot replies ❓, read why, fix it, then remove and re-add ${settings.approveEmoji}.`,
+    '`/bhvoid` — undo an approved submission (paste its message link + a reason)',
+    '`/bhgive` — add or remove points by hand (negative = remove; reason required)',
     '`/bhpost` — post the next bounty now instead of waiting for Monday',
-    '`/bhreload` — re-read the Google Sheet and refresh the bounty post'
+    '`/bhreload` — re-read the Google Sheet now (it also refreshes on its own every 5 min)',
+    'Every admin action is logged in the admin log channel.'
   ];
   return {
     color: GOLD,
     title: '🎯 Bounty Hunter — how it works',
+    description: 'A new boss bounty every week. Get the drops, post a screenshot, earn points, spend them in the shop.',
     fields: [
-      { name: 'How to play', value: clip(howTo.join('\n')) },
-      { name: 'Points', value: '**Wallet** = points you can spend. **Earned** = every point you ever earned (leaderboards use this; spending doesn\'t lower it).' },
-      { name: 'Commands', value: player.join('\n') },
-      ...(admin ? [{ name: '🛠️ Admin commands', value: adminCmds.join('\n') }] : [])
+      { name: '📋 How to take part', value: clip(steps.join('\n')) },
+      { name: '🏆 Points', value: clip(points.join('\n')) },
+      { name: '⚠️ Common mistakes', value: clip(mistakes.join('\n')) },
+      { name: '⌨️ Commands', value: player.join('\n') },
+      ...(admin ? [{ name: '🛠️ Admin only', value: clip(adminCmds.join('\n')) }] : [])
     ],
     footer: { text: 'Only you can see this message' }
   };

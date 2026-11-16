@@ -219,7 +219,7 @@ async function postBounty(bounty) {
   }
   if (s.awardsChannelId && s.awardsChannelId !== s.boardChannelId) {
     const awards = await fetchChannel(s.awardsChannelId);
-    await awards?.send({ embeds: [e.newBountyEmbed(draft, msg.url)] }).catch(() => {});
+    await awards?.send({ embeds: [e.newBountyEmbed(draft, msg.url, s)] }).catch(() => {});
   }
   await refreshBoards();
   return { ok: true, url: msg.url };
@@ -247,14 +247,14 @@ async function handleApproval(message, approverUser) {
 
   const parsed = parseSubmission(message.content);
   if (parsed.error) {
-    await reply(message, `${QUESTION} I couldn't find an item name in this message (${parsed.error}). Edit the message to say which drop it is, then remove and re-add ${s.approveEmoji}.`);
+    await reply(message, `${QUESTION} I couldn't find an item name in this message (${parsed.error}). Edit the message to say which drop it is, then remove and re-add ${s.approveEmoji}. (Help: /bhhelp)`);
     await message.react(QUESTION).catch(() => {});
     return;
   }
 
   const candidates = b.openBounties(sheet.getBounties(), t, s).filter(x => x.postedAt <= message.createdTimestamp);
   if (!candidates.length) {
-    await reply(message, `${QUESTION} This was posted before the current bounty went up, so it can't count.`);
+    await reply(message, `${QUESTION} This was posted before the current bounty went up, so it can't count. (Help: /bhhelp)`);
     await message.react(QUESTION).catch(() => {});
     return;
   }
@@ -277,7 +277,7 @@ async function handleApproval(message, approverUser) {
 
   if (!chosen) {
     const current = candidates[0];
-    await reply(message, `${QUESTION} ${problem || `"${parsed.itemName}" isn't part of the **${current.boss}** bounty. Check the spelling (see /bhbounty), edit the message, then remove and re-add ${s.approveEmoji}.`}`);
+    await reply(message, `${QUESTION} ${problem || `"${parsed.itemName}" isn't part of the **${current.boss}** bounty. Check the spelling (see /bhbounty), edit the message, then remove and re-add ${s.approveEmoji}.`} (Help: /bhhelp)`);
     await message.react(QUESTION).catch(() => {});
     return;
   }
