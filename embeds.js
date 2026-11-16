@@ -15,6 +15,9 @@ const ts = (ms, style = 'f') => `<t:${Math.floor(ms / 1000)}:${style}>`;
 const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 const chan = (id, fallback) => (id ? `<#${id}>` : fallback);
 const HELP_HINT = '❓ New to bounties? Type /bhhelp';
+/** Clickable "how it works" guide link + clickable /bhhelp (plain text if not known yet). */
+const helpLine = (links = {}) =>
+  `📖 ${links.guideUrl ? `[How it works](${links.guideUrl})` : 'How it works: see the pinned guide'} · ❓ Help: ${links.helpCmd || '**/bhhelp**'}`;
 const clip = (text, max = 1024) => (text.length > max ? `${text.slice(0, max - 1)}…` : text);
 
 function weekLabel(weekOf) {
@@ -52,7 +55,7 @@ function codeWordField(bounty) {
   };
 }
 
-function boardEmbed(bounty, view, settings) {
+function boardEmbed(bounty, view, settings, links = {}) {
   const fields = [...(bounty.codeWord && !view.closed ? [codeWordField(bounty)] : []), ...partFields(bounty)];
   let color = GOLD;
   let status = '';
@@ -62,8 +65,8 @@ function boardEmbed(bounty, view, settings) {
     `1. Get the drop${bounty.parts.length > 1 ? `s for **all ${bounty.parts.length} parts** below` : ' below'}.\n` +
     `2. Screenshot it${bounty.codeWord ? ' with the **code word** visible in your chat' : ''}.\n` +
     `3. Post the screenshot in ${subs} and **type the item name** in the same message.\n` +
-    `4. Wait for an approver to react ${settings.approveEmoji}. Done!\n` +
-    "Type **/bhhelp** if you're unsure.";
+    `4. Wait for an approver to react ${settings.approveEmoji}. Done!\n\n` +
+    helpLine(links);
 
   if (view.closed) {
     color = GREY;
@@ -157,25 +160,24 @@ function claimEmbed({ player, points, isFirst, multiplied, bounty, settings, cla
   };
 }
 
-function multiplierEmbed(bounty, settings, firstNow) {
+function multiplierEmbed(bounty, settings, firstNow, links = {}) {
   return {
     color: RED,
     title: `🔥 ×${settings.multiplier} is now active on the ${bounty.boss} bounty`,
     description: `Nobody has claimed it in ${settings.multiplierAfterHours} hours. The **first claim is now worth ${firstNow} points**.\n` +
-      `Details: ${chan(settings.boardChannelId, 'the bounty board')} · Post screenshots in ${chan(settings.submissionsChannelId, 'the submissions channel')}`,
-    footer: { text: HELP_HINT }
+      `Details: ${chan(settings.boardChannelId, 'the bounty board')} · Post screenshots in ${chan(settings.submissionsChannelId, 'the submissions channel')}\n${helpLine(links)}`
   };
 }
 
-function newBountyEmbed(bounty, boardUrl, settings = {}) {
+function newBountyEmbed(bounty, boardUrl, settings = {}, links = {}) {
   return {
     color: GOLD,
     title: `🎯 New bounty: ${bounty.boss}`,
     description: `This week's bounty is up${boardUrl ? `: ${boardUrl}` : ` in ${chan(settings.boardChannelId, 'the bounty board')}`}.` +
       (bounty.codeWord ? `\n🔑 Code word: **${bounty.codeWord}**. Have it visible in your screenshots.` : '') +
       `\n📸 Post your screenshots in ${chan(settings.submissionsChannelId, 'the submissions channel')} with the item name in the message.` +
-      '\nGood luck, hunters!',
-    footer: { text: HELP_HINT }
+      `\n${helpLine(links)}` +
+      '\nGood luck, hunters!'
   };
 }
 

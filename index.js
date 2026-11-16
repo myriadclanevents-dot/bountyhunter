@@ -125,7 +125,9 @@ const optShape = opts => JSON.stringify((opts || []).map(o => [o.type, o.name, o
  * Creates/updates only OUR commands (POST upserts one command by name and
  * leaves every other command alone). Never a bulk overwrite.
  */
+const commandIds = {}; // name -> id; changes when an event bot wipes + we re-add
 async function ensureCommands({ quiet = false } = {}) {
+  const helpBefore = commandIds.bhhelp;
   const rest = new REST({ version: '10' }).setToken(TOKEN);
   const route = Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID);
   try {
@@ -133,8 +135,9 @@ async function ensureCommands({ quiet = false } = {}) {
     let changed = 0;
     for (const cmd of commands) {
       const have = existing.find(c => c.name === cmd.name);
-      if (have && have.description === cmd.description && optShape(have.options) === optShape(cmd.options)) continue;
-      await rest.post(route, { body: cmd });
+      if (have && have.description === cmd.description && optShape(have.options) === optShape(cmd.options)) { commandIds[cmd.name] = have.id; continue; }
+      const made = await rest.post(route, { body: cmd });
+      commandIds[cmd.name] = made.id;
       changed++;
     }
     for (const c of existing) {
@@ -144,6 +147,7 @@ async function ensureCommands({ quiet = false } = {}) {
       }
     }
     if (changed) console.log(`✅ Bounty commands: ${changed} added/updated (another bot may have reset them).`);
+    if (helpBefore && helpBefore !== commandIds.bhhelp) await refreshBoards(); // re-link /bhhelp in the pinned post
     else if (!quiet) console.log(`✅ Bounty commands already registered (${commands.length}).`);
   } catch (err) {
     console.error(`❌ Could not register commands: ${err.message}`);
@@ -170,6 +174,9 @@ const lastRendered = new Map();
  * own pinned guide and edits it if the text changed, else posts + pins a new one.
  */
 let lastGuide = '';
+let guideUrl = null;
+/** Links shown in bounty posts: the pinned guide + a clickable /bhhelp. */
+const links = () => ({ guideUrl, helpCmd: commandIds.bhhelp ? `</bhhelp:${commandIds.bhhelp}>` : null });
 async function ensureGuide() {
   const channel = await fetchChannel(S().boardChannelId);
   if (!channel) return;
@@ -182,9 +189,11 @@ async function ensureGuide() {
       .find(m => m.author?.id === client.user.id && m.embeds[0]?.title === e.GUIDE_TITLE);
     if (old) {
       await old.edit({ embeds: [embed], allowedMentions: NO_PINGS });
+      guideUrl = old.url;
     } else {
       const msg = await channel.send({ embeds: [embed], allowedMentions: NO_PINGS });
       await msg.pin();
+      guideUrl = msg.url;
       console.log('📌 Posted and pinned the Bounty Hunter guide.');
     }
     lastGuide = json;
@@ -206,7 +215,7 @@ async function refreshBoards() {
   const channel = await fetchChannel(s.boardChannelId);
   if (!channel) return;
   for (const bounty of targets) {
-    const embed = e.boardEmbed(withCode(bounty), viewFor(bounty), s);
+    const embed = e.boardEmbed(withCode(bounty), viewFor(bounty), s, links());
     const key = JSON.stringify(embed);
     if (lastRendered.get(bounty.messageId) === key) continue;
     try {
@@ -214,7 +223,19 @@ async function refreshBoards() {
       await msg.edit({ embeds: [embed] });
       lastRendered.set(bounty.messageId, key);
     } catch (err) {
-      console.error(`⚠️ Could not update the bounty post for ${bounty.weekOf}: ${err.message}`);
+      if (err.code === 10008 && open.includes(bounty)) { // post was deleted: put it back (same post time)
+        try {
+          const msg = await channel.send({ embeds: [embed] });
+          await msg.pin().catch(() => {});
+          await sheet.markPosted(bounty.weekOf, bounty.postedAt, msg.id, bounty.codeWord || '');
+          lastRendered.set(msg.id, key);
+          console.log(`📌 Bounty post for ${bounty.weekOf} was deleted, re-posted it.`);
+        } catch (e2) {
+          console.error(`⚠️ Could not re-post the bounty for ${bounty.weekOf}: ${e2.message}`);
+        }
+      } else {
+        console.error(`⚠️ Could not update the bounty post for ${bounty.weekOf}: ${err.message}`);
+      }
     }
   }
 }
@@ -236,7 +257,7 @@ async function postBounty(bounty) {
   const postedAt = now();
   const draft = withCode({ ...bounty, postedAt });
   const view = e.bountyView(draft, { claims: [], inProgress: 0, settings: s, now: postedAt, closed: false });
-  const msg = await channel.send({ embeds: [e.boardEmbed(draft, view, s)] });
+  const msg = await channel.send({ embeds: [e.boardEmbed(draft, view, s, links())] });
   await msg.pin().catch(err => console.error(`⚠️ Could not pin the bounty (needs Pin Messages permission): ${err.message}`));
   await sheet.markPosted(bounty.weekOf, postedAt, msg.id, draft.codeWord);
   console.log(`🎯 Posted bounty ${bounty.weekOf}: ${bounty.boss}`);
@@ -247,7 +268,7 @@ async function postBounty(bounty) {
   }
   if (s.awardsChannelId && s.awardsChannelId !== s.boardChannelId) {
     const awards = await fetchChannel(s.awardsChannelId);
-    await awards?.send({ embeds: [e.newBountyEmbed(draft, msg.url, s)] }).catch(() => {});
+    await awards?.send({ embeds: [e.newBountyEmbed(draft, msg.url, s, links())] }).catch(() => {});
   }
   await refreshBoards();
   return { ok: true, url: msg.url };
@@ -554,7 +575,7 @@ const handlers = {
     await i.deferReply({ flags: MessageFlags.Ephemeral });
     const ok = await sheet.loadAll();
     lastRendered.clear();
-    if (ok) { await refreshBoards(); lastGuide = ''; await ensureGuide(); }
+    if (ok) { lastGuide = ''; await ensureGuide(); await refreshBoards(); }
     const warns = sheet.warnings();
     return i.editReply({ content: ok
       ? `✅ Sheet re-read. ${sheet.getBounties().length} bounties, ${sheet.getShop().length} shop items.${warns.length ? `\n⚠️ ${warns.slice(0, 5).join('\n⚠️ ')}` : ''}`
@@ -738,7 +759,7 @@ async function checkMultiplier(t) {
   multiplierAnnounced.add(bounty.weekOf);
   const view = viewFor(bounty, t);
   const awards = await fetchChannel(s.awardsChannelId);
-  await awards?.send({ embeds: [e.multiplierEmbed(bounty, s, view.firstNow)] }).catch(() => {});
+  await awards?.send({ embeds: [e.multiplierEmbed(bounty, s, view.firstNow, links())] }).catch(() => {});
   await refreshBoards();
 }
 
@@ -817,12 +838,12 @@ client.once(Events.ClientReady, async () => {
   const thisWeek = sheet.getBounties().find(x => x.weekOf === week && x.active);
   if (thisWeek && !thisWeek.postedAt) console.log(`🗓️ This week's bounty (${thisWeek.boss}) is due ${new Date(b.scheduledPostTime(week, s)).toISOString()}.`);
 
-  await refreshBoards();
   await ensureGuide();
+  await refreshBoards();
   setInterval(tick, 60 * 1000);
   tick();
   setInterval(() => ensureCommands({ quiet: true }), 5 * 60 * 1000);
-  setInterval(async () => { if (await sheet.refreshConfig()) { await refreshBoards(); await ensureGuide(); } }, 5 * 60 * 1000);
+  setInterval(async () => { if (await sheet.refreshConfig()) { await ensureGuide(); await refreshBoards(); } }, 5 * 60 * 1000);
 });
 
 client.on(Events.Error, err => console.error(`❌ Discord client error: ${err.message}`));

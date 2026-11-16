@@ -122,10 +122,15 @@ test('pinned post and announcements link channels and mention /bhhelp', () => {
   assert.match(board.description, /<#42>/);
   assert.match(board.description, /\/bhhelp/);
   assert.match(board.footer.text, /\/bhhelp/);
-  const ann = e.newBountyEmbed(bounty, null, s);
+  const L = { guideUrl: 'https://discord.com/channels/1/7/99', helpCmd: '</bhhelp:555>' };
+  const linked = e.boardEmbed(bounty, view, s, L).description;
+  assert.match(linked, /\[How it works\]\(https:\/\/discord\.com\/channels\/1\/7\/99\)/);
+  assert.match(linked, /<\/bhhelp:555>/);
+  const ann = e.newBountyEmbed(bounty, null, s, L);
   assert.match(ann.description, /<#7>/);
   assert.match(ann.description, /<#42>/);
-  assert.match(ann.footer.text, /\/bhhelp/);
+  assert.match(ann.description, /\[How it works\]/);
+  assert.match(ann.description, /<\/bhhelp:555>/);
   assert.match(e.multiplierEmbed(bounty, s, 20).description, /<#7>.*<#42>/);
 });
 
