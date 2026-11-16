@@ -383,6 +383,15 @@ async function needAdmin(i) {
   return false;
 }
 
+/** Posts a manual admin action in the admin log channel (Admin_Log_Channel_ID, else the shop admin channel). */
+async function logAdmin(i, action, text, reason = '') {
+  const channel = await fetchChannel(S().adminLogChannelId);
+  const admin = await displayName(i.guild, i.user);
+  const sent = await channel?.send({ embeds: [e.adminLogEmbed({ admin, adminId: i.user.id, action, text, reason })], allowedMentions: NO_PINGS })
+    .catch(err => console.error(`⚠️ Could not post in the admin log: ${err.message}`));
+  if (!sent) console.log(`🛠️ ${admin} /${action}: ${text}${reason ? ` (reason: ${reason})` : ''}`);
+}
+
 function nextMondayText() {
   const nextMonday = b.dayMs(b.mondayOf(now())) + 7 * b.DAY;
   return `Monday ${e.weekLabel(b.isoDate(nextMonday))}`;
@@ -474,6 +483,7 @@ const handlers = {
     if (!id) return i.reply(ephemeral({ content: 'Give me the message link (right-click the message → Copy Message Link) or its ID.' }));
     await i.deferReply({ flags: MessageFlags.Ephemeral });
     const result = await queue(() => voidSubmission(id, i));
+    if (result.startsWith('🗑️')) await logAdmin(i, 'bhvoid', result);
     return i.editReply({ content: result });
   },
 
@@ -489,6 +499,7 @@ const handlers = {
     await queue(() => sheet.addPoints({ time: now(), player, playerId: user.id, change: amount, type: b.TYPE_ADMIN, detail: reason, by, ref: `admin:${now()}` }));
     playersDirty = true;
     const bal = b.balances(sheet.getPoints(), user.id, now());
+    await logAdmin(i, 'bhgive', `${amount > 0 ? '➕' : '➖'} **${amount > 0 ? '+' : ''}${amount} pts** for **${player}** (<@${user.id}>) · wallet now ${bal.wallet} pts`, reason);
     return i.editReply({ content: `${amount > 0 ? '➕' : '➖'} ${amount > 0 ? '+' : ''}${amount} pts for **${player}** (${reason}). Wallet ${bal.wallet} · earned ${bal.earned}.` });
   },
 
@@ -498,6 +509,7 @@ const handlers = {
     if (!next) return i.reply(ephemeral({ content: 'There is no active, unposted bounty for this week or later in the Bounties tab.' }));
     await i.deferReply({ flags: MessageFlags.Ephemeral });
     const res = await queue(() => postBounty(next));
+    if (res.ok) await logAdmin(i, 'bhpost', `Posted the **${next.boss}** bounty (week of ${e.weekLabel(next.weekOf)}) early: ${res.url}`);
     return i.editReply({ content: res.ok ? `✅ Posted the **${next.boss}** bounty (week of ${e.weekLabel(next.weekOf)}): ${res.url}` : `❌ Not posted: ${res.error}` });
   },
 
@@ -508,6 +520,7 @@ const handlers = {
     lastRendered.clear();
     if (ok) await refreshBoards();
     const warns = sheet.warnings();
+    await logAdmin(i, 'bhreload', ok ? 'Re-read the Google Sheet.' : 'Tried to re-read the Google Sheet (failed).');
     return i.editReply({ content: ok
       ? `✅ Sheet re-read. ${sheet.getBounties().length} bounties, ${sheet.getShop().length} shop items.${warns.length ? `\n⚠️ ${warns.slice(0, 5).join('\n⚠️ ')}` : ''}`
       : '❌ Could not read the sheet. Check the SHEET_URL deployment.' });

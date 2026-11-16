@@ -87,4 +87,13 @@ test('wheel: odds in the buy confirmation, frames point at the right prize', () 
   assert.match(e.adminPurchaseEmbed({ id: 'W123', player: 'Ana', playerId: '1', item: 'Bond', cost: 0 }).description, /won \*\*Bond\*\* on the prize wheel/);
 });
 
+test('admin log shows who, what and the reason', () => {
+  const d = e.adminLogEmbed({ admin: 'Mod', adminId: '9', action: 'bhgive', text: '➕ **+100 pts** for **Ana**', reason: 'Clan event win' }).description;
+  assert.match(d, /\*\*Mod\*\* \(<@9>\) used `\/bhgive`/);
+  assert.match(d, /\+100 pts/);
+  assert.match(d, /Reason: Clan event win/);
+  assert.equal(b.readSettings({ Shop_Admin_Channel_ID: '5' }).adminLogChannelId, '5');
+  assert.equal(b.readSettings({ Shop_Admin_Channel_ID: '5', Admin_Log_Channel_ID: '7' }).adminLogChannelId, '7');
+});
+
 console.log(`embeds: ${passed} tests passed`);

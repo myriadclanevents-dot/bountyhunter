@@ -282,6 +282,17 @@ function adminPurchaseEmbed(purchase, deliveredBy = null) {
   };
 }
 
+/** Admin log: every manual action, visible to the admin team in Discord. */
+function adminLogEmbed({ admin, adminId, action, text, reason = '' }) {
+  return {
+    color: GREY,
+    description: clip(`🛠️ **${admin}** (<@${adminId}>) used \`/${action}\`
+${text}${reason ? `
+📝 Reason: ${reason}` : ''}`, 4000),
+    timestamp: new Date().toISOString()
+  };
+}
+
 function pastEmbed(rows) {
   return {
     color: GREY,
@@ -293,5 +304,5 @@ function pastEmbed(rows) {
 module.exports = {
   ts, weekLabel, bountyView, boardEmbed, progressEmbed, claimEmbed, multiplierEmbed, newBountyEmbed,
   table, leaderboardEmbed, monthlyWinnersEmbed, meEmbed, shopEmbed, confirmBuyEmbed, adminPurchaseEmbed, pastEmbed,
-  wheelOddsText, spinFrameEmbed
+  wheelOddsText, spinFrameEmbed, adminLogEmbed
 };

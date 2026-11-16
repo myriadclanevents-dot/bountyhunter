@@ -56,7 +56,8 @@ function readSettings(raw = {}) {
     postHourTo: to,
     lateClaimHours: Math.max(0, num(raw.Late_Claim_Hours, 0)),
     lastMonthlyPost: str(raw.Last_Monthly_Post),
-    wheelChannelId: str(raw.Wheel_Channel_ID)
+    wheelChannelId: str(raw.Wheel_Channel_ID),
+    adminLogChannelId: str(raw.Admin_Log_Channel_ID) || str(raw.Shop_Admin_Channel_ID)
   };
 }
 
