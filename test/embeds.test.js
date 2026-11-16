@@ -96,4 +96,17 @@ test('admin log shows who, what and the reason', () => {
   assert.equal(b.readSettings({ Shop_Admin_Channel_ID: '5', Admin_Log_Channel_ID: '7' }).adminLogChannelId, '7');
 });
 
+test('help: explains the flow, admin commands only for admins', () => {
+  const s = b.readSettings({ Submissions_Channel_ID: '42', Default_First_Points: 20, Multiplier: 3, Multiplier_After_Hours: 48 });
+  const player = e.helpEmbed(s);
+  const text = player.fields.map(f => f.value).join('\n');
+  assert.match(text, /<#42>/);
+  assert.match(text, /\*\*20 pts\*\*/);
+  assert.match(text, /\*\*48 h\*\*.*×3/);
+  assert.match(text, /\/bhbuy/);
+  assert.doesNotMatch(text, /\/bhvoid/);
+  assert.match(e.helpEmbed(s, { admin: true }).fields.map(f => f.value).join('\n'), /\/bhvoid/);
+  assert.doesNotMatch(e.helpEmbed(b.readSettings({ Multiplier: 1 })).fields[0].value, /×/);
+});
+
 console.log(`embeds: ${passed} tests passed`);

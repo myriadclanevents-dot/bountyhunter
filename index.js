@@ -114,7 +114,8 @@ const commands = [
     .addIntegerOption(o => o.setName('amount').setDescription('Points (negative to remove)').setRequired(true).setMinValue(-1000).setMaxValue(1000))
     .addStringOption(o => o.setName('reason').setDescription('Shown in the Points tab').setRequired(true)),
   new SlashCommandBuilder().setName('bhpost').setDescription("ADMIN: post the next bounty now instead of waiting for Monday"),
-  new SlashCommandBuilder().setName('bhreload').setDescription('ADMIN: re-read the Google Sheet and refresh the bounty post')
+  new SlashCommandBuilder().setName('bhreload').setDescription('ADMIN: re-read the Google Sheet and refresh the bounty post'),
+  new SlashCommandBuilder().setName('bhhelp').setDescription('How Bounty Hunter works and all its commands')
 ].map(c => c.toJSON());
 
 const optShape = opts => JSON.stringify((opts || []).map(o => [o.type, o.name, o.description, Boolean(o.required),
@@ -399,6 +400,11 @@ function nextMondayText() {
 }
 
 const handlers = {
+  async bhhelp(i) {
+    const admin = await isAdmin(i.guild, i.user.id).catch(() => false);
+    return i.reply(ephemeral({ embeds: [e.helpEmbed(S(), { admin })] }));
+  },
+
   async bhbounty(i) {
     if (!(await needSheet(i))) return;
     const bounty = b.currentBounty(sheet.getBounties());

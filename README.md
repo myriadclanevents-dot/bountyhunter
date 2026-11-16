@@ -24,7 +24,7 @@ event bot (bingo / drop race) is live.
 - `2 of: Kerapac, Nex` → any 2 **different** items, mixed from both bosses
 
 ### Commands (all start with `bh`)
-Players: `/bhbounty` `/bhme` `/bhtop` `/bhshop` `/bhbuy` `/bhpast`
+Players: `/bhbounty` `/bhme` `/bhtop` `/bhshop` `/bhbuy` `/bhpast` `/bhhelp`
 Admins (Approvers tab or Manage Server): `/bhvoid` `/bhgive` `/bhpost` `/bhreload`
 
 ### Points

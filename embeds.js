@@ -301,8 +301,47 @@ function pastEmbed(rows) {
   };
 }
 
+/** /bhhelp — how Bounty Hunter works + the commands. Admin section only for admins. */
+function helpEmbed(settings, { admin = false } = {}) {
+  const ch = id => (id ? `<#${id}>` : 'the submissions channel');
+  const howTo = [
+    `1. A new boss bounty goes up every **Monday** at a random hour (UTC) in ${settings.boardChannelId ? `<#${settings.boardChannelId}>` : 'the bounty board'}.`,
+    `2. Get the drop(s), then post a **screenshot** in ${ch(settings.submissionsChannelId)} with the **item name in the message** (and the code word visible, if the bounty has one).`,
+    `3. An approver reacts ${settings.approveEmoji}. The bot reacts 🎯 and tells you your progress.`,
+    `4. Finish every part to claim: first claim **${settings.defaultFirst} pts**, later claims **${settings.defaultLater} pts** (one claim per player; some bounties pay more).`,
+    ...(settings.multiplier > 1
+      ? [`5. Nobody claimed it after **${settings.multiplierAfterHours} h**? The first claim becomes **×${settings.multiplier}**.`] : [])
+  ];
+  const player = [
+    '`/bhbounty` — this week\'s bounty and your progress',
+    '`/bhme` — your wallet, points earned and rank (or someone else\'s)',
+    '`/bhtop` — leaderboard (this month or all time)',
+    '`/bhshop` — what you can buy with points',
+    '`/bhbuy` — spend points in the shop',
+    '`/bhpast` — earlier bounties and who claimed them first',
+    '`/bhhelp` — this message'
+  ];
+  const adminCmds = [
+    '`/bhvoid` — undo an approved submission (message link + reason)',
+    '`/bhgive` — add or remove points by hand (with a reason)',
+    '`/bhpost` — post the next bounty now instead of waiting for Monday',
+    '`/bhreload` — re-read the Google Sheet and refresh the bounty post'
+  ];
+  return {
+    color: GOLD,
+    title: '🎯 Bounty Hunter — how it works',
+    fields: [
+      { name: 'How to play', value: clip(howTo.join('\n')) },
+      { name: 'Points', value: '**Wallet** = points you can spend. **Earned** = every point you ever earned (leaderboards use this; spending doesn\'t lower it).' },
+      { name: 'Commands', value: player.join('\n') },
+      ...(admin ? [{ name: '🛠️ Admin commands', value: adminCmds.join('\n') }] : [])
+    ],
+    footer: { text: 'Only you can see this message' }
+  };
+}
+
 module.exports = {
   ts, weekLabel, bountyView, boardEmbed, progressEmbed, claimEmbed, multiplierEmbed, newBountyEmbed,
   table, leaderboardEmbed, monthlyWinnersEmbed, meEmbed, shopEmbed, confirmBuyEmbed, adminPurchaseEmbed, pastEmbed,
-  wheelOddsText, spinFrameEmbed, adminLogEmbed
+  wheelOddsText, spinFrameEmbed, adminLogEmbed, helpEmbed
 };
