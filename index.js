@@ -107,7 +107,8 @@ const commands = [
   new SlashCommandBuilder().setName('bhbuy').setDescription('Spend bounty points in the shop'),
   new SlashCommandBuilder().setName('bhpast').setDescription('Earlier bounties and who claimed them first'),
   new SlashCommandBuilder().setName('bhvoid').setDescription('ADMIN: undo an approved bounty submission')
-    .addStringOption(o => o.setName('message').setDescription('Link (or ID) of the submission message').setRequired(true)),
+    .addStringOption(o => o.setName('message').setDescription('Link (or ID) of the submission message').setRequired(true))
+    .addStringOption(o => o.setName('reason').setDescription('Why it is undone (shown in the admin log)').setRequired(true).setMaxLength(200)),
   new SlashCommandBuilder().setName('bhgive').setDescription('ADMIN: add or remove points by hand')
     .addUserOption(o => o.setName('player').setDescription('Who').setRequired(true))
     .addIntegerOption(o => o.setName('amount').setDescription('Points (negative to remove)').setRequired(true).setMinValue(-1000).setMaxValue(1000))
@@ -482,8 +483,9 @@ const handlers = {
     const id = b.messageIdFrom(i.options.getString('message'));
     if (!id) return i.reply(ephemeral({ content: 'Give me the message link (right-click the message → Copy Message Link) or its ID.' }));
     await i.deferReply({ flags: MessageFlags.Ephemeral });
-    const result = await queue(() => voidSubmission(id, i));
-    if (result.startsWith('🗑️')) await logAdmin(i, 'bhvoid', result);
+    const reason = i.options.getString('reason');
+    const result = await queue(() => voidSubmission(id, i, reason));
+    if (result.startsWith('🗑️')) await logAdmin(i, 'bhvoid', result, reason);
     return i.editReply({ content: result });
   },
 
@@ -526,7 +528,7 @@ const handlers = {
   }
 };
 
-async function voidSubmission(messageId, i) {
+async function voidSubmission(messageId, i, reason = '') {
   const active = b.activeSubmissions(sheet.getSubmissions());
   const row = active.find(s => String(s.messageId) === messageId);
   if (!row) return 'That message is not an approved bounty submission (or it was already voided).';
@@ -538,7 +540,7 @@ async function voidSubmission(messageId, i) {
   let extra = '';
   if (claim) {
     await sheet.addPoints({ time: now(), player: row.player, playerId: row.playerId, change: -Number(claim.change), type: b.TYPE_VOID,
-      detail: `Voided claim: ${bounty?.boss || row.weekOf}`, by, weekOf: row.weekOf, ref: claim.ref });
+      detail: `Voided claim: ${bounty?.boss || row.weekOf}${reason ? ` (${reason})` : ''}`, by, weekOf: row.weekOf, ref: claim.ref });
     playersDirty = true;
     extra = ` Their claim (${claim.change} pts) was taken back.`;
     if (String(claim.type).toLowerCase() === b.TYPE_FIRST) extra += ' It was the FIRST claim: the bonus does not move to anyone else automatically (use /bhgive if needed).';
