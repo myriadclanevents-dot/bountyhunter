@@ -520,7 +520,6 @@ const handlers = {
     lastRendered.clear();
     if (ok) await refreshBoards();
     const warns = sheet.warnings();
-    await logAdmin(i, 'bhreload', ok ? 'Re-read the Google Sheet.' : 'Tried to re-read the Google Sheet (failed).');
     return i.editReply({ content: ok
       ? `✅ Sheet re-read. ${sheet.getBounties().length} bounties, ${sheet.getShop().length} shop items.${warns.length ? `\n⚠️ ${warns.slice(0, 5).join('\n⚠️ ')}` : ''}`
       : '❌ Could not read the sheet. Check the SHEET_URL deployment.' });
