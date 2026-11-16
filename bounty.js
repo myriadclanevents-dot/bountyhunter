@@ -16,6 +16,11 @@ const TYPE_CLAIM = 'claim';
 const TYPE_SHOP = 'shop';
 const TYPE_ADMIN = 'admin';
 const TYPE_VOID = 'void';
+const TYPE_WHEEL = 'wheel'; // spin cost (−) and points won (+): wallet only, never leaderboards
+
+// Types that move the wallet but never count as "earned".
+const WALLET_ONLY = new Set([TYPE_SHOP, TYPE_WHEEL]);
+const walletOnly = p => WALLET_ONLY.has(String(p.type ?? '').trim().toLowerCase());
 
 // ---------------------------------------------------------------------------
 // Settings
@@ -50,7 +55,8 @@ function readSettings(raw = {}) {
     postHourFrom: from,
     postHourTo: to,
     lateClaimHours: Math.max(0, num(raw.Late_Claim_Hours, 0)),
-    lastMonthlyPost: str(raw.Last_Monthly_Post)
+    lastMonthlyPost: str(raw.Last_Monthly_Post),
+    wheelChannelId: str(raw.Wheel_Channel_ID)
   };
 }
 
@@ -384,7 +390,7 @@ function balances(points, playerId, now) {
     if (str(p.playerId) !== str(playerId)) continue;
     const change = num(p.change, 0);
     wallet += change;
-    if (str(p.type).toLowerCase() === TYPE_SHOP) continue;
+    if (walletOnly(p)) continue;
     earned += change;
     const t = Number(p.time);
     if (t >= from && t < to) month += change;
@@ -412,7 +418,7 @@ function standings(points, { from = -Infinity, to = Infinity } = {}) {
   };
 
   for (const p of uniquePoints(points)) {
-    if (str(p.type).toLowerCase() === TYPE_SHOP) continue;
+    if (walletOnly(p)) continue;
     const t = Number(p.time);
     if (!(t >= from && t < to)) continue;
     get(str(p.playerId)).points += num(p.change, 0);
@@ -460,12 +466,82 @@ function parseShop(rows) {
       cost: num(r.cost, 0),
       stock: stockRaw === '' ? null : num(stockRaw, null),
       active: r.active === true || /^(true|yes|1|x|✓|✔)$/i.test(str(r.active)),
-      description: str(r.description)
+      description: str(r.description),
+      // "wheel" in Delivered How = buying it spins the prize wheel.
+      isWheel: /^wheel$/i.test(str(r.deliveredHow))
     };
   }).filter(r => r.item && r.cost > 0);
 }
 
 const inStock = item => item.stock === null || item.stock > 0;
+
+// ---------------------------------------------------------------------------
+// Prize wheel
+// ---------------------------------------------------------------------------
+
+const WHEEL_KINDS = ['points', 'item', 'nothing'];
+
+/**
+ * Wheel tab rows → prizes. Weight is relative (weights 40/10/1 = 40:10:1).
+ * Kind: "points" (added to the wallet automatically), "item" (an admin delivers it)
+ * or "nothing". Empty Kind = points when Points > 0, otherwise item.
+ */
+function parseWheel(rows) {
+  return (rows || []).map(r => {
+    const points = Math.max(0, Math.round(num(r.points, 0)));
+    let kind = str(r.kind).toLowerCase();
+    if (!WHEEL_KINDS.includes(kind)) kind = points > 0 ? 'points' : 'item';
+    if (kind === 'points' && points <= 0) kind = 'nothing';
+    const activeRaw = str(r.active);
+    return {
+      prize: str(r.prize),
+      weight: Math.max(0, num(r.weight, 0)),
+      points: kind === 'points' ? points : 0,
+      kind,
+      active: activeRaw === '' || r.active === true || /^(true|yes|1|x|✓|✔)$/i.test(activeRaw),
+      description: str(r.description)
+    };
+  }).filter(p => p.prize && p.weight > 0 && p.active);
+}
+
+/** Chance of each prize in percent (same order). */
+function wheelOdds(prizes) {
+  const total = prizes.reduce((s, p) => s + p.weight, 0);
+  return prizes.map(p => (total ? (p.weight / total) * 100 : 0));
+}
+
+/** Weighted pick. `rand` returns a number in [0, 1). Returns the prize index. */
+function pickPrize(prizes, rand = Math.random) {
+  const total = prizes.reduce((s, p) => s + p.weight, 0);
+  let r = rand() * total;
+  for (let i = 0; i < prizes.length; i++) {
+    r -= prizes[i].weight;
+    if (r < 0) return i;
+  }
+  return prizes.length - 1;
+}
+
+// How far the pointer jumps on each edit, and the wait before each edit (ms).
+// Discord allows ~5 edits per 5 s per channel, so never go below 1000 ms.
+const SPIN_STEPS = [3, 3, 3, 2, 2, 2, 1, 1, 1, 1];
+const SPIN_DELAYS = [1000, 1000, 1000, 1000, 1100, 1200, 1400, 1700, 2000, 2400];
+
+/**
+ * Frames for the message-edit animation: the pointer starts somewhere random
+ * and the LAST frame lands on `winner`. Returns { start, frames: [{ index, delay }] }.
+ */
+function spinPlan(count, winner, rand = Math.random) {
+  const extra = count > 1 ? Math.floor(rand() * count) : 0; // so the start doesn't give the winner away
+  const steps = SPIN_STEPS.map((s, i) => (i === 0 ? s + extra : s));
+  const total = steps.reduce((a, s) => a + s, 0);
+  const start = (((winner - total) % count) + count) % count;
+  let index = start;
+  const frames = steps.map((s, i) => {
+    index = (index + s) % count;
+    return { index, delay: SPIN_DELAYS[i] };
+  });
+  return { start, frames };
+}
 
 // ---------------------------------------------------------------------------
 // Discord helpers that are still pure
@@ -480,7 +556,8 @@ function messageIdFrom(text) {
 }
 
 module.exports = {
-  HOUR, DAY, TYPE_FIRST, TYPE_CLAIM, TYPE_SHOP, TYPE_ADMIN, TYPE_VOID,
+  HOUR, DAY, TYPE_FIRST, TYPE_CLAIM, TYPE_SHOP, TYPE_ADMIN, TYPE_VOID, TYPE_WHEEL,
+  parseWheel, wheelOdds, pickPrize, spinPlan,
   num, readSettings,
   isoDate, dayMs, mondayOf, monthKey, monthRange, hash, scheduledPostTime, CODE_WORDS, codeWordFor,
   parsePart, describePart, parseBounty, parseBounties,

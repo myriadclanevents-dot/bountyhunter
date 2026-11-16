@@ -14,13 +14,14 @@ let available = false;
 let degraded = false;
 
 const state = {
-  bountyRows: [], drops: [], shopRows: [], approvers: [], rawSettings: {},
+  bountyRows: [], drops: [], shopRows: [], wheelRows: [], approvers: [], rawSettings: {},
   submissions: [], points: [], purchases: []
 };
 
 // Derived (re-parsed whenever config changes).
 let bounties = [];
 let shop = [];
+let wheel = [];
 let settings = b.readSettings({});
 
 function configure(sheetUrl) { url = String(sheetUrl || '').trim(); return Boolean(url); }
@@ -43,6 +44,7 @@ function applyConfig(body) {
   if (Array.isArray(body.bounties)) state.bountyRows = body.bounties;
   if (Array.isArray(body.drops)) state.drops = body.drops.filter(d => d.boss && d.item).map(d => ({ boss: String(d.boss).trim(), item: String(d.item).trim() }));
   if (Array.isArray(body.shop)) state.shopRows = body.shop;
+  if (Array.isArray(body.wheel)) state.wheelRows = body.wheel;
   if (Array.isArray(body.approvers)) state.approvers = body.approvers.map(String);
   if (body.settings && typeof body.settings === 'object') state.rawSettings = body.settings;
 
@@ -55,6 +57,7 @@ function applyConfig(body) {
     return row;
   });
   shop = b.parseShop(state.shopRows);
+  wheel = b.parseWheel(state.wheelRows);
 }
 
 function warnings() {
@@ -133,11 +136,15 @@ async function addPoints(row) {
 }
 
 /** Buying is checked and written by the sheet in one locked step (stock + wallet). */
-async function buy({ item, player, playerId }) {
-  const res = await post({ action: 'buy', item, player, playerId, time: Date.now(), opId: newOpId() });
+/** For a wheel item, `wheelPrize` (already picked by the bot) is saved in the same step. */
+async function buy({ item, player, playerId, wheelPrize = null }) {
+  const wheel = wheelPrize ? { prize: wheelPrize.prize, kind: wheelPrize.kind, points: wheelPrize.points } : null;
+  const res = await post({ action: 'buy', item, player, playerId, time: Date.now(), opId: newOpId(), wheel });
   if (res.ok) {
     state.purchases.push(res.purchase);
     state.points.push(res.points);
+    if (res.wheelPoints) state.points.push(res.wheelPoints);
+    if (res.wheelPurchase) state.purchases.push(res.wheelPurchase);
     const row = state.shopRows.find(r => String(r.item).trim().toLowerCase() === String(res.purchase.item).trim().toLowerCase());
     if (row && res.stockLeft !== null && res.stockLeft !== undefined) row.stock = res.stockLeft;
     shop = b.parseShop(state.shopRows);
@@ -181,6 +188,7 @@ module.exports = {
   isDegraded: () => degraded,
   getBounties: () => bounties,
   getShop: () => shop,
+  getWheel: () => wheel,
   getSettings: () => settings,
   getDrops: () => state.drops,
   getSubmissions: () => state.submissions,

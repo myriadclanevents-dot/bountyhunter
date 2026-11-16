@@ -69,4 +69,22 @@ test('code word shown on open bounties, hidden once closed', () => {
   assert.match(e.newBountyEmbed(withWord, 'u').description, /Wyvern37/);
 });
 
+test('wheel: odds in the buy confirmation, frames point at the right prize', () => {
+  const prizes = b.parseWheel([
+    { prize: '+5 pts', weight: 75, points: 5 },
+    { prize: 'Bond', weight: 25, kind: 'item' }
+  ]);
+  const confirm = e.confirmBuyEmbed({ item: 'Spin', cost: 10, isWheel: true }, 50, prizes);
+  assert.match(confirm.description, /`   75%` \+5 pts/);
+  assert.match(confirm.description, /`   25%` Bond 🎁/);
+  assert.doesNotMatch(e.confirmBuyEmbed({ item: 'GP', cost: 10 }, 50, prizes).description, /wheel/);
+
+  const mid = e.spinFrameEmbed(prizes, 1, { player: 'Ana' });
+  assert.match(mid.description, /▶️ \*\*Bond 🎁\*\*/);
+  assert.match(mid.title, /Ana is spinning/);
+  const end = e.spinFrameEmbed(prizes, 0, { player: 'Ana', done: true });
+  assert.match(end.description, /Ana\*\* won \*\*\+5 pts/);
+  assert.match(e.adminPurchaseEmbed({ id: 'W123', player: 'Ana', playerId: '1', item: 'Bond', cost: 0 }).description, /won \*\*Bond\*\* on the prize wheel/);
+});
+
 console.log(`embeds: ${passed} tests passed`);

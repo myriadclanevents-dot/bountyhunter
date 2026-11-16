@@ -85,6 +85,10 @@ async function removeOwnReaction(message, emoji) {
   await message.reactions.cache.get(emoji)?.users.remove(client.user.id).catch(() => {});
 }
 
+const crypto = require('crypto');
+const fairRandom = () => crypto.randomInt(0, 2 ** 32) / 2 ** 32; // [0, 1), not predictable
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
 const reply = (message, content) => message.reply({ content, allowedMentions: NO_PINGS }).catch(err =>
   console.error(`⚠️ Could not reply in submissions: ${err.message}`));
 
@@ -404,7 +408,7 @@ const handlers = {
     const month = b.standings(points, b.monthRange(t));
     const stats = all.find(r => r.playerId === user.id) || { claims: 0, firsts: 0 };
     const recent = b.uniquePoints(points).filter(p => String(p.playerId) === user.id).slice(-5).reverse()
-      .map(p => `${String(p.type).toLowerCase() === b.TYPE_SHOP ? '🛒 ' : ''}${p.detail || p.type} · ${Number(p.change) > 0 ? '+' : ''}${p.change}`);
+      .map(p => `${{ [b.TYPE_SHOP]: '🛒 ', [b.TYPE_WHEEL]: '🎡 ' }[String(p.type).toLowerCase()] || ''}${p.detail || p.type} · ${Number(p.change) > 0 ? '+' : ''}${p.change}`);
     const name = b.playerNames(points).get(user.id) || await displayName(i.guild, user);
     return i.reply(ephemeral({ embeds: [e.meEmbed({
       player: name, balance: b.balances(points, user.id, t),
@@ -552,11 +556,13 @@ async function handleComponent(i) {
     if (!item) return i.update({ content: 'That item is no longer for sale.', components: [], embeds: [] });
     if (!b.inStock(item)) return i.update({ content: `**${item.item}** is sold out.`, components: [], embeds: [] });
     if (wallet < item.cost) return i.update({ content: `You have **${wallet} pts**; **${item.item}** costs **${item.cost} pts**.`, components: [], embeds: [] });
+    const prizes = sheet.getWheel();
+    if (item.isWheel && !prizes.length) return i.update({ content: 'The prize wheel has no prizes set up yet. Ask an admin.', components: [], embeds: [] });
     pendingBuys.set(i.user.id, item.item);
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId('bh:buyok').setStyle(ButtonStyle.Success).setLabel(`Buy for ${item.cost} pts`),
       new ButtonBuilder().setCustomId('bh:buyno').setStyle(ButtonStyle.Secondary).setLabel('Cancel'));
-    return i.update({ content: '', embeds: [e.confirmBuyEmbed(item, wallet)], components: [row] });
+    return i.update({ content: '', embeds: [e.confirmBuyEmbed(item, wallet, item.isWheel ? prizes : null)], components: [row] });
   }
 
   if (i.customId === 'bh:buyno') {
@@ -570,21 +576,83 @@ async function handleComponent(i) {
     pendingBuys.delete(i.user.id);
     await i.update({ content: '⏳ Buying…', embeds: [], components: [] });
     const player = await displayName(i.guild, i.user);
-    const res = await queue(() => sheet.buy({ item: itemName, player, playerId: i.user.id }));
+
+    // A wheel spin: the prize is picked NOW and saved together with the purchase.
+    const shopItem = sheet.getShop().find(x => x.item === itemName);
+    const prizes = shopItem?.isWheel ? [...sheet.getWheel()] : null;
+    if (shopItem?.isWheel && !prizes.length) return i.editReply({ content: '❌ The prize wheel has no prizes set up yet. Nothing was spent.' });
+    const winner = prizes ? b.pickPrize(prizes, fairRandom) : -1;
+    const wheelPrize = prizes ? prizes[winner] : null;
+
+    const res = await queue(() => sheet.buy({ item: itemName, player, playerId: i.user.id, wheelPrize }));
     if (!res.ok) return i.editReply({ content: `❌ Not bought: ${res.error}. Nothing was spent.` });
     playersDirty = true;
 
-    const admin = await fetchChannel(S().shopAdminChannelId);
-    const ping = await admin?.send({ embeds: [e.adminPurchaseEmbed(res.purchase)], allowedMentions: NO_PINGS }).catch(() => null);
-    if (ping) {
-      await ping.react(DELIVERED).catch(() => {});
-      await sheet.setPurchaseMessage(res.purchase.id, ping.id);
-    } else {
-      console.error(`⚠️ Purchase ${res.purchase.id} saved, but the admin ping could not be posted (check Shop_Admin_Channel_ID).`);
+    if (wheelPrize) {
+      if (res.wheelPurchase) await pingAdmins(res.wheelPurchase);
+      const url = await spinWheel({ prizes, winner, player, playerId: i.user.id, fallback: i.channel });
+      const wallet = b.balances(sheet.getPoints(), i.user.id, now()).wallet;
+      return i.editReply({ content: `🎡 You bought a spin for ${res.purchase.cost} pts. ${url ? `It's spinning here: ${url}` : 'You won'} → **${wheelPrize.prize}**. Wallet now: **${wallet} pts**.` });
     }
+
+    await pingAdmins(res.purchase);
     const wallet = b.balances(sheet.getPoints(), i.user.id, now()).wallet;
     return i.editReply({ content: `✅ You bought **${res.purchase.item}** for ${res.purchase.cost} pts. An admin will deliver it. Wallet now: **${wallet} pts**.` });
   }
+}
+
+/** Posts a purchase (or a wheel prize to hand out) in the shop admin channel, with ✅ to mark it delivered. */
+async function pingAdmins(purchase) {
+  const admin = await fetchChannel(S().shopAdminChannelId);
+  const ping = await admin?.send({ embeds: [e.adminPurchaseEmbed(purchase)], allowedMentions: NO_PINGS }).catch(() => null);
+  if (ping) {
+    await ping.react(DELIVERED).catch(() => {});
+    await sheet.setPurchaseMessage(purchase.id, ping.id);
+  } else {
+    console.error(`⚠️ Purchase ${purchase.id} saved, but the admin ping could not be posted (check Shop_Admin_Channel_ID).`);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Prize wheel animation (one message, edited ~10 times, slowing down)
+// ---------------------------------------------------------------------------
+
+// Spins in the same channel run one after another, so they never share Discord's
+// edit limit (about 5 edits per 5 seconds per channel).
+const spinChains = new Map();
+
+function spinWheel({ prizes, winner, player, playerId, fallback }) {
+  const s = S();
+  const channelId = s.wheelChannelId || s.submissionsChannelId || fallback?.id;
+  const prev = spinChains.get(channelId) || Promise.resolve();
+  const run = prev.then(() => animateSpin({ channelId, prizes, winner, player, playerId, fallback }));
+  spinChains.set(channelId, run.catch(() => null));
+  return run.catch(err => { console.error(`⚠️ Wheel animation failed: ${err.message}`); return null; });
+}
+
+async function animateSpin({ channelId, prizes, winner, player, playerId, fallback }) {
+  const found = await fetchChannel(channelId);
+  const channel = found?.isTextBased?.() ? found : fallback; // a forum itself can't take messages
+  if (!channel?.send) throw new Error(`can't post in channel ${channelId} (set Wheel_Channel_ID)`);
+  const plan = b.spinPlan(prizes.length, winner, fairRandom);
+  const content = `🎡 <@${playerId}> bought a spin of the prize wheel!`;
+  const msg = await channel.send({ content, embeds: [e.spinFrameEmbed(prizes, plan.start, { player })], allowedMentions: NO_PINGS });
+  for (let n = 0; n < plan.frames.length; n++) {
+    const { index, delay } = plan.frames[n];
+    const done = n === plan.frames.length - 1;
+    await sleep(delay);
+    try {
+      await msg.edit({ content, embeds: [e.spinFrameEmbed(prizes, index, { player, done })], allowedMentions: NO_PINGS });
+    } catch (err) {
+      console.error(`⚠️ Wheel frame ${n + 1} failed: ${err.message}`);
+      if (done) { // the result must show: one more try
+        await sleep(3000);
+        await msg.edit({ content, embeds: [e.spinFrameEmbed(prizes, index, { player, done })], allowedMentions: NO_PINGS });
+      }
+    }
+  }
+  console.log(`🎡 ${player} spun the wheel: ${prizes[winner].prize}`);
+  return msg.url;
 }
 
 client.on(Events.InteractionCreate, async i => {

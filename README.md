@@ -16,6 +16,7 @@ event bot (bingo / drop race) is live.
 | 72 h with no claim | First claim × `Multiplier` (judged by when the finishing screenshot was **posted**). |
 | `Awards_Channel_ID` | Claim announcements, multiplier alerts, monthly top 3 on the 1st. |
 | `/bhbuy` | Player buys; the sheet checks wallet + stock; admins get a ping in `Shop_Admin_Channel_ID` and react ✅ when delivered. |
+| Prize wheel | A Shop item with **Delivered How = `wheel`**. Buying it picks a prize (weights in the **Wheel** tab) and spins it in `Wheel_Channel_ID` (empty = the submissions channel): one message edited ~10 times over ~14 s. Points prizes go straight to the wallet; item prizes ping the admin channel like a purchase. |
 
 ### Part cells
 - `Kerapac` → any drop of that boss (boss names come from the **Drops** tab)
@@ -28,7 +29,7 @@ Admins (Approvers tab or Manage Server): `/bhvoid` `/bhgive` `/bhpost` `/bhreloa
 
 ### Points
 Everything is logged in the **Points** tab, one line per change. Wallet = sum of
-all lines. Earned = all lines except shop purchases. Leaderboards use Earned.
+all lines. Earned = all lines except shop purchases and wheel winnings (type `wheel`). Leaderboards use Earned.
 Fix mistakes with `/bhvoid` (undo an approval) and `/bhgive` (± points) — never
 by editing the grey tabs.
 

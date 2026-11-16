@@ -226,4 +226,76 @@ test('admin code word is read from the row', () => {
   assert.equal(x.codeWord, 'Hydra7');
 });
 
+// --- prize wheel ------------------------------------------------------------
+const WHEEL_ROWS = [
+  { prize: '+5 pts', weight: 40, kind: 'points', points: 5, active: true },
+  { prize: 'Nothing', weight: 25, kind: 'nothing', active: '' },
+  { prize: '+20 pts', weight: '15', kind: '', points: 20 },
+  { prize: '5m GP', weight: 15, kind: '', points: '' },
+  { prize: 'Off prize', weight: 50, active: false },
+  { prize: 'Zero weight', weight: 0 },
+  { prize: 'Bond', weight: '1', kind: 'item' }
+];
+
+test('wheel parsing: kinds inferred, inactive and zero-weight rows dropped', () => {
+  const w = b.parseWheel(WHEEL_ROWS);
+  assert.deepEqual(w.map(p => p.prize), ['+5 pts', 'Nothing', '+20 pts', '5m GP', 'Bond']);
+  assert.deepEqual(w.map(p => p.kind), ['points', 'nothing', 'points', 'item', 'item']);
+  assert.equal(w[2].points, 20);
+  assert.equal(w[3].points, 0);
+});
+
+test('wheel odds add up to 100', () => {
+  const odds = b.wheelOdds(b.parseWheel(WHEEL_ROWS));
+  assert.ok(Math.abs(odds.reduce((a, x) => a + x, 0) - 100) < 1e-9);
+  assert.equal(Math.round(odds[0] * 10) / 10, 41.7); // 40 / 96
+});
+
+test('pickPrize follows the weights', () => {
+  const w = b.parseWheel(WHEEL_ROWS); // total 96
+  assert.equal(b.pickPrize(w, () => 0), 0);
+  assert.equal(b.pickPrize(w, () => 39.9 / 96), 0);
+  assert.equal(b.pickPrize(w, () => 40 / 96), 1);
+  assert.equal(b.pickPrize(w, () => 0.99999), 4);
+  const counts = [0, 0, 0, 0, 0];
+  let seed = 7;
+  const rand = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  for (let n = 0; n < 20000; n++) counts[b.pickPrize(w, rand)]++;
+  assert.ok(Math.abs(counts[0] / 20000 - 40 / 96) < 0.02);
+  assert.ok(counts[4] > 50 && counts[4] < 500);
+});
+
+test('spin plan always lands on the winner, ~10 edits, never faster than 1 per second', () => {
+  for (const count of [1, 2, 5, 6, 12]) {
+    for (let winner = 0; winner < count; winner++) {
+      for (const r of [0, 0.3, 0.99]) {
+        const plan = b.spinPlan(count, winner, () => r);
+        assert.equal(plan.frames.at(-1).index, winner);
+        assert.ok(plan.frames.length <= 12);
+        assert.ok(plan.frames.every(f => f.delay >= 1000 && f.index >= 0 && f.index < count));
+      }
+    }
+  }
+});
+
+test('shop: Delivered How "wheel" marks the spin item', () => {
+  const shop = b.parseShop([{ item: 'Spin', cost: 10, active: true, deliveredHow: ' Wheel ' }, { item: 'GP', cost: 5, active: true, deliveredHow: 'in game' }]);
+  assert.equal(shop[0].isWheel, true);
+  assert.equal(shop[1].isWheel, false);
+});
+
+test('wheel rows move the wallet but never earned or leaderboards', () => {
+  const t = Date.parse('2026-11-20T12:00:00Z');
+  const pts = [
+    { time: t, playerId: '1', player: 'A', change: 30, type: 'claim', weekOf: '2026-11-16', ref: 'claim:2026-11-16:1', opId: 'a' },
+    { time: t, playerId: '1', player: 'A', change: -10, type: 'shop', detail: 'Prize wheel spin', ref: 'P1', opId: 'b' },
+    { time: t, playerId: '1', player: 'A', change: 20, type: 'wheel', detail: 'Wheel: +20 pts', ref: 'P1', opId: 'b-win' }
+  ];
+  const bal = b.balances(pts, '1', t);
+  assert.equal(bal.wallet, 40);
+  assert.equal(bal.earned, 30);
+  assert.equal(bal.month, 30);
+  assert.equal(b.standings(pts)[0].points, 30);
+});
+
 console.log(`bounty: ${passed} tests passed`);

@@ -227,19 +227,56 @@ function shopEmbed(items, wallet) {
   };
 }
 
-function confirmBuyEmbed(item, wallet) {
+function confirmBuyEmbed(item, wallet, prizes = null) {
+  const wheel = item.isWheel && prizes?.length
+    ? `\n\n🎡 **Buying this spins the prize wheel.** The prizes:\n${wheelOddsText(prizes)}\n🎁 = an admin delivers it · points go straight to your wallet.`
+    : '';
   return {
     color: BLURPLE,
     title: 'Confirm purchase',
-    description: `**${item.item}**${item.description ? `\n${item.description}` : ''}\n\n` +
-      `Cost **${item.cost} pts** · wallet after: **${wallet - item.cost} pts**\nYour earned points and rank stay the same.`
+    description: clip(`**${item.item}**${item.description ? `\n${item.description}` : ''}${wheel}\n\n` +
+      `Cost **${item.cost} pts** · wallet after: **${wallet - item.cost} pts**\nYour earned points and rank stay the same.`, 4000)
+  };
+}
+
+const pct = n => (n >= 10 || n === 0 ? n.toFixed(0) : n >= 1 ? n.toFixed(1) : n.toFixed(2)).replace(/\.0+$/, '');
+
+const prizeLabel = p => (p.kind === 'item' ? `${p.prize} 🎁` : p.prize);
+
+/** The wheel's prizes with their odds (shown before buying a spin). */
+function wheelOddsText(prizes) {
+  const odds = b.wheelOdds(prizes);
+  return prizes.map((p, i) => `\`${pct(odds[i]).padStart(5)}%\` ${prizeLabel(p)}${p.description ? ` — ${p.description}` : ''}`).join('\n');
+}
+
+/** One frame of the spin animation (the whole prize list with a pointer). */
+function spinFrameEmbed(prizes, index, { player, done = false }) {
+  const lines = prizes.slice(0, 30).map((p, i) => (i === index
+    ? `▶️ **${prizeLabel(p)}** ${done ? '◀️' : ''}`
+    : `▫️ ${prizeLabel(p)}`));
+  const won = prizes[index];
+  let result = '';
+  if (done) {
+    result = won.kind === 'nothing'
+      ? `\n\n😬 **${player}** spun… **${won.prize}**. Better luck next time!`
+      : won.kind === 'points'
+        ? `\n\n🎉 **${player}** won **${won.prize}**! The points are in their wallet.`
+        : `\n\n🎉 **${player}** won **${won.prize}**! An admin will deliver it.`;
+  }
+  return {
+    color: done ? (won.kind === 'nothing' ? GREY : GREEN) : GOLD,
+    title: done ? '🎡 Prize Wheel' : `🎡 ${player} is spinning…`,
+    description: clip(lines.join('\n') + result, 4000)
   };
 }
 
 function adminPurchaseEmbed(purchase, deliveredBy = null) {
+  const what = String(purchase.id).startsWith('W')
+    ? `won **${purchase.item}** on the prize wheel.`
+    : `bought **${purchase.item}** for ${purchase.cost} pts.`;
   return {
     color: deliveredBy ? GREEN : RED,
-    description: `🛒 **${purchase.player}** (<@${purchase.playerId}>) bought **${purchase.item}** for ${purchase.cost} pts.\n` +
+    description: `${String(purchase.id).startsWith('W') ? '🎡' : '🛒'} **${purchase.player}** (<@${purchase.playerId}>) ${what}\n` +
       (deliveredBy ? `✅ Delivered by ${deliveredBy}.` : 'React ✅ when delivered.'),
     footer: { text: `Purchase ${purchase.id}` }
   };
@@ -255,5 +292,6 @@ function pastEmbed(rows) {
 
 module.exports = {
   ts, weekLabel, bountyView, boardEmbed, progressEmbed, claimEmbed, multiplierEmbed, newBountyEmbed,
-  table, leaderboardEmbed, monthlyWinnersEmbed, meEmbed, shopEmbed, confirmBuyEmbed, adminPurchaseEmbed, pastEmbed
+  table, leaderboardEmbed, monthlyWinnersEmbed, meEmbed, shopEmbed, confirmBuyEmbed, adminPurchaseEmbed, pastEmbed,
+  wheelOddsText, spinFrameEmbed
 };

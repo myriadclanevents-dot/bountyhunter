@@ -83,6 +83,14 @@ var TABS = {
     ['item', 'Item', '', ''], ['cost', 'Cost', '', ''], ['stock', 'Stock', '', ''],
     ['active', 'Active', '', ''], ['description', 'Description', '', ''], ['deliveredHow', 'Delivered How', '', '']
   ]},
+  wheel: { name: 'Wheel', cols: [
+    ['prize', 'Prize', '', 'What the player wins, as shown on the wheel (e.g. "+20 pts", "5m GP")'],
+    ['weight', 'Weight', '', 'Relative chance. Weights 40 / 10 / 1 = 40:10:1. If they add up to 100 they are percentages. 0 = off'],
+    ['kind', 'Kind', '', 'points = added to the wallet automatically\nitem = an admin delivers it (ping in the shop admin channel)\nnothing = no prize\nEmpty: points if Points > 0, else item'],
+    ['points', 'Points', '', 'Only for Kind "points": how many points go into the wallet'],
+    ['active', 'Active', '', 'TRUE/FALSE. Empty = on'],
+    ['description', 'Description', '', 'Optional short text shown next to the prize in /bhspin']
+  ]},
   drops: { name: 'Drops', cols: [['boss', 'Boss', '', ''], ['item', 'Item', '', '']] },
   approvers: { name: 'Approvers', cols: [['id', 'Discord User ID', 'id', ''], ['name', 'Name', '', '']] },
   settings: { name: 'Settings', cols: [['key', 'Setting', '', ''], ['value', 'Value', '', ''], ['meaning', 'Meaning', '', '']] }
@@ -100,6 +108,7 @@ function doGet(e) {
       bounties: readBounties_(),
       drops: readTab_(TABS.drops),
       shop: readTab_(TABS.shop),
+      wheel: readTab_(TABS.wheel),
       approvers: readTab_(TABS.approvers).map(function (r) { return r.id; }).filter(String),
       settings: readSettings_()
     };
@@ -310,9 +319,27 @@ function buy_(p) {
     appendObj_(TABS.purchases, purchase);
     var points = { time: time, player: p.player, playerId: p.playerId, change: -cost, type: 'shop', detail: purchase.item, by: '', ref: purchase.id, opId: p.opId || purchase.id };
     appendObj_(TABS.points, points);
-    return { ok: true, purchase: purchase, points: points, stockLeft: stock === null ? null : stock - 1 };
+    var win = wheelWin_(p, purchase);
+    return { ok: true, purchase: purchase, points: points, stockLeft: stock === null ? null : stock - 1,
+      wheelPoints: win.wheelPoints || null, wheelPurchase: win.wheelPurchase || null };
   }
   return { ok: false, error: 'no shop item called ' + p.item };
+}
+
+/** A bought wheel spin: the prize the bot picked is saved with the purchase. */
+function wheelWin_(p, purchase) {
+  var w = p.wheel;
+  var out = {};
+  if (!w) return out;
+  var won = Number(w.points) || 0;
+  if (w.kind === 'points' && won > 0) {
+    out.wheelPoints = { time: purchase.time, player: p.player, playerId: p.playerId, change: won, type: 'wheel', detail: 'Wheel: ' + w.prize, by: '', ref: purchase.id, opId: (p.opId || purchase.id) + '-win' };
+    appendObj_(TABS.points, out.wheelPoints);
+  } else if (w.kind === 'item') {
+    out.wheelPurchase = { id: 'W' + purchase.time, time: purchase.time, player: p.player, playerId: p.playerId, item: String(w.prize), cost: 0 };
+    appendObj_(TABS.purchases, out.wheelPurchase);
+  }
+  return out;
 }
 
 function findRow_(spec, field, value) {
@@ -395,6 +422,8 @@ function setupBountyHunter() {
   ss.setSpreadsheetTimeZone('Etc/UTC');
 
   makeDrops_(ss);
+  makeWheel_(ss);
+  addWheelSettings_();
   // Bot tabs: create if missing (with their full column set).
   ['submissions', 'points', 'purchases', 'players'].forEach(function (k) {
     var spec = TABS[k];
@@ -442,6 +471,40 @@ function header_(sh, cols, color) {
   r.setNotes([cols.map(function (c) { return c[1] || ''; })]);
   sh.setFrozenRows(1);
   for (var i = 1; i <= cols.length; i++) sh.setColumnWidth(i, 150);
+}
+
+function makeWheel_(ss) {
+  if (ss.getSheetByName('Wheel')) return;
+  var sh = ss.insertSheet('Wheel');
+  header_(sh, TABS.wheel.cols.map(function (c) { return [c[1], c[3]]; }), ADMIN_COLOR);
+  // Placeholder prizes — weights add up to 100, so they read as percentages.
+  var rows = [
+    ['+5 pts', 40, 'points', 5, true, ''],
+    ['Nothing', 25, 'nothing', '', true, ''],
+    ['+20 pts', 15, 'points', 20, true, ''],
+    ['5m GP', 15, 'item', '', true, 'Paid in game by an admin'],
+    ['Custom Discord role (30 days)', 4, 'item', '', true, 'Your own colour and name'],
+    ['JACKPOT: Bond', 1, 'item', '', true, '']
+  ];
+  sh.getRange(2, 1, rows.length, rows[0].length).setValues(rows);
+  sh.setColumnWidth(1, 260);
+  sh.setColumnWidth(6, 260);
+  sh.getRange(1, 8).setValue('DRAFT — example prizes, change freely').setFontColor('#B4531A').setFontWeight('bold');
+  sh.setTabColor('#F1C232');
+}
+
+function addWheelSettings_() {
+  if (!findRow_(TABS.settings, 'key', 'Wheel_Channel_ID')) {
+    appendObj_(TABS.settings, { key: 'Wheel_Channel_ID', value: '',
+      meaning: 'Prize wheel: channel or thread id where bought spins are shown. Empty = the submissions channel' });
+  }
+  // The shop item that spins the wheel: Delivered How = "wheel". Added switched OFF.
+  var shop = readTab_(TABS.shop);
+  var has = shop.some(function (r) { return /^wheel$/i.test(String(r.deliveredHow || '').trim()); });
+  if (!has) {
+    appendObj_(TABS.shop, { item: 'Prize wheel spin', cost: 10, stock: '', active: false,
+      description: 'Spin the wheel for a random prize', deliveredHow: 'wheel' });
+  }
 }
 
 function makeDrops_(ss) {
