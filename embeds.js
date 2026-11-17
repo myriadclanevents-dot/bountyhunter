@@ -88,6 +88,7 @@ function boardEmbed(bounty, view, settings, links = {}) {
     description = howTo;
   }
 
+  if (bounty.chosenById) fields.push({ name: '🎯 Chosen by', value: `<@${bounty.chosenById}>`, inline: false });
   fields.push({ name: 'First claim', value: view.first ? `Taken by ${view.first.player}` : `**${view.firstNow} pts**${view.multOn ? ` ~~${view.firstBase}~~` : ''}`, inline: true });
   fields.push({ name: 'Later claims', value: `${view.later} pts each`, inline: true });
   if (!view.first && !view.closed && view.multStart && !view.multOn) {
@@ -174,6 +175,7 @@ function newBountyEmbed(bounty, boardUrl, settings = {}, links = {}) {
     color: GOLD,
     title: `🎯 New bounty: ${bounty.boss}`,
     description: `This week's bounty is up${boardUrl ? `: ${boardUrl}` : ` in ${chan(settings.boardChannelId, 'the bounty board')}`}.` +
+      (bounty.chosenById ? `\n🎯 Chosen by <@${bounty.chosenById}>, who bought "Pick next week's bounty" in the shop.` : '') +
       (bounty.codeWord ? `\n🔑 Code word: **${bounty.codeWord}**. Have it visible in your screenshots.` : '') +
       `\n📸 Post your screenshots in ${chan(settings.submissionsChannelId, 'the submissions channel')} with the item name in the message.` +
       `\n${helpLine(links)}` +
@@ -293,6 +295,33 @@ function adminPurchaseEmbed(purchase, deliveredBy = null) {
   };
 }
 
+const pointsText = (bounty, settings) =>
+  `1st **${bounty.firstPoints ?? settings.defaultFirst} pts** · later **${bounty.laterPoints ?? settings.defaultLater} pts**`;
+
+/** "Pick next week's bounty": confirm the chosen bounty before paying. */
+function confirmPickEmbed(bounty, weekOf, item, wallet, settings) {
+  const parts = bounty.parts.map((p, i) => `${bounty.parts.length > 1 ? `**Part ${i + 1}:** ` : ''}${b.describePart(p)}`);
+  return {
+    color: BLURPLE,
+    title: `Pick: ${bounty.boss}`,
+    description: clip(`This will be the bounty for the week of **${weekLabel(weekOf)}**.\n\n${parts.join('\n')}\n\n` +
+      `Points: ${pointsText(bounty, settings)}\nYou can claim it yourself too.\n\n` +
+      'It stays **secret** until it goes up on Monday. Everyone will see that you bought the pick, but not which boss.\n\n' +
+      `Cost **${item.cost} pts** · wallet after: **${wallet - item.cost} pts**`, 4000)
+  };
+}
+
+/** Shop admin channel: info only (the bot delivers a pick by itself, no ✅ needed). */
+function pickAdminEmbed({ player, playerId, bounty, weekOf, cost, settings }) {
+  return {
+    color: GREEN,
+    description: clip(`🎯 **${player}** (<@${playerId}>) bought **Pick next week's bounty** for ${cost} pts and chose ` +
+      `**${bounty.boss}** for the week of **${weekLabel(weekOf)}** (${pointsText(bounty, settings)}).\n` +
+      'Nothing to deliver: the bot posts it on Monday. Keep it secret!\n' +
+      'To undo: delete that row in the History tab and give the points back with `/bhgive`.', 4000)
+  };
+}
+
 /** Admin log: every manual action, visible to the admin team in Discord. */
 function adminLogEmbed({ admin, adminId, action, text, reason = '' }) {
   return {
@@ -320,7 +349,8 @@ function helpEmbed(settings, { admin = false, pinned = false } = {}) {
   const subs = chan(settings.submissionsChannelId, 'the submissions channel');
   const awards = chan(settings.awardsChannelId, 'the awards channel');
   const steps = [
-    `**1.** Every **Monday** (random hour, UTC) a new boss bounty is posted and pinned in ${board}. Or type **/bhbounty**.`,
+    `**1.** Every **Monday** (random hour, UTC) a new boss bounty is posted and pinned in ${board}. Or type **/bhbounty**. ` +
+      `The boss is random, and a boss doesn't come back within ${settings.repeatCooldownWeeks} weeks.`,
     '**2.** Get the drop(s) it asks for. Some bounties have several parts: you need **all** of them.',
     '**3.** Take a screenshot of the drop. If the bounty has a 🔑 **code word**, type it in your in-game chat first so it shows in the screenshot.',
     `**4.** Post the screenshot in ${subs} and **type the item name in the same message** (example: \`Spider leg top\`).`,
@@ -355,6 +385,7 @@ function helpEmbed(settings, { admin = false, pinned = false } = {}) {
     '`/bhvoid` — undo an approved submission (paste its message link + a reason)',
     '`/bhgive` — add or remove points by hand (negative = remove; reason required)',
     '`/bhpost` — post the next bounty now instead of waiting for Monday',
+    'Bounties tab = the list the bot picks from at random. Leave **Week Of** empty; type a Monday date only to force a bounty that week. The History tab shows every week.',
     '`/bhreload` — re-read the Google Sheet now (it also refreshes on its own every 5 min)',
     'Every admin action is logged in the admin log channel.'
   ];
@@ -375,6 +406,6 @@ function helpEmbed(settings, { admin = false, pinned = false } = {}) {
 
 module.exports = {
   ts, weekLabel, bountyView, boardEmbed, progressEmbed, claimEmbed, multiplierEmbed, newBountyEmbed,
-  table, leaderboardEmbed, monthlyWinnersEmbed, meEmbed, shopEmbed, confirmBuyEmbed, adminPurchaseEmbed, pastEmbed,
+  table, leaderboardEmbed, monthlyWinnersEmbed, meEmbed, shopEmbed, confirmBuyEmbed, confirmPickEmbed, pickAdminEmbed, adminPurchaseEmbed, pastEmbed,
   wheelOddsText, spinFrameEmbed, adminLogEmbed, helpEmbed, GUIDE_TITLE
 };

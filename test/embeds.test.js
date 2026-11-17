@@ -134,4 +134,21 @@ test('pinned post and announcements link channels and mention /bhhelp', () => {
   assert.match(e.multiplierEmbed(bounty, s, 20).description, /<#7>.*<#42>/);
 });
 
+test('pick: confirm shows week, parts and points; chosen-by on the post; cooldown in help', () => {
+  const s = b.readSettings({ Repeat_Cooldown_Weeks: 6 });
+  const [bounty] = b.parseBounties([{ boss: 'Telos', parts: ['Zaryte bow'], firstPoints: 15, active: true }], []);
+  const c = e.confirmPickEmbed(bounty, '2026-11-30', { item: 'Pick', cost: 50 }, 80, s);
+  assert.match(c.description, /Zaryte bow/);
+  assert.match(c.description, /1st \*\*15 pts\*\* · later \*\*5 pts\*\*/);
+  assert.match(c.description, /wallet after: \*\*30 pts\*\*/);
+  assert.match(c.description, /secret/);
+  const admin = e.pickAdminEmbed({ player: 'D', playerId: '9', bounty, weekOf: '2026-11-30', cost: 50, settings: s });
+  assert.match(admin.description, /Telos/);
+  const posted = { ...bounty, weekOf: '2026-11-30', postedAt: 0, chosenById: '9' };
+  const view = e.bountyView(posted, { claims: [], inProgress: 0, settings: s, now: 0, closed: false });
+  assert.ok(e.boardEmbed(posted, view, s).fields.some(f => f.value === '<@9>'));
+  assert.match(e.newBountyEmbed(posted, 'u').description, /Chosen by <@9>/);
+  assert.match(e.helpEmbed(s).fields[0].value, /within 6 weeks/);
+});
+
 console.log(`embeds: ${passed} tests passed`);

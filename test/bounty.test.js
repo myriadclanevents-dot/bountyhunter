@@ -190,9 +190,82 @@ test('current, open and due bounties', () => {
   assert.deepEqual(b.openBounties(rows, now, S).map(x => x.boss), ['B']);
 
   const monday = b.scheduledPostTime('2026-11-30', S);
-  assert.equal(b.dueBounty(rows, monday - 1000, S), null);
-  assert.equal(b.dueBounty(rows, monday, S).boss, 'C');
-  assert.equal(b.nextUnposted(rows, now).boss, 'C');
+  assert.equal(b.dueWeek(rows, monday - 1000, S), null);
+  assert.equal(b.dueWeek(rows, monday, S), '2026-11-30');
+  assert.equal(b.nextOpenWeek(rows, now), '2026-11-30');
+});
+
+// --- random order ---------------------------------------------------------
+const hist = (weekOf, boss, extra = {}) => ({ weekOf, boss, parts: ['Kerapac'], active: true, postedAt: Date.parse(`${weekOf}T10:00:00Z`), ...extra });
+const poolOf = names => b.parseBounties(names.map(n => ({ boss: n, parts: ['Kerapac'], active: true })), drops);
+
+test('settings: cooldown 8 weeks and 20 pick options by default, capped at 25', () => {
+  assert.equal(S.repeatCooldownWeeks, 8);
+  assert.equal(S.pickOptions, 20);
+  assert.equal(b.readSettings({ Pick_Options: 99, Repeat_Cooldown_Weeks: '3' }).pickOptions, 25);
+  assert.equal(b.readSettings({ Repeat_Cooldown_Weeks: '3' }).repeatCooldownWeeks, 3);
+});
+
+test('a bounty posted early covers its week (no double post)', () => {
+  // Araxxor for the week of 11-23 went up on 11-15: nothing more on 11-16 or 11-23.
+  const h = b.parseBounties([hist('2026-11-23', 'Araxxor', { postedAt: Date.parse('2026-11-15T12:00:00Z') })], drops);
+  assert.equal(b.dueWeek(h, Date.parse('2026-11-17T23:00:00Z'), S), null);
+  assert.equal(b.dueWeek(h, Date.parse('2026-11-23T23:59:00Z'), S), null);
+  assert.equal(b.nextOpenWeek(h, Date.parse('2026-11-17T12:00:00Z')), '2026-11-30');
+  assert.equal(b.dueWeek(h, Date.parse('2026-12-06T23:00:00Z'), S), '2026-11-30');
+});
+
+test('plan: a player pick wins, then a forced Week Of, then random', () => {
+  const pool = b.parseBounties([
+    { boss: 'Vorago', parts: ['Nex'], active: true },
+    { boss: 'Telos', parts: ['Nex'], active: true, weekOf: '2026-11-30' }
+  ], drops);
+  assert.equal(b.planWeek(pool, [], '2026-11-30', S).source, 'forced');
+  assert.equal(b.planWeek(pool, [], '2026-11-30', S).bounty.boss, 'Telos');
+  const picked = b.parseBounties([{ weekOf: '2026-11-30', boss: 'Zuk', parts: ['Nex'], active: true, chosenBy: 'Donini' }], drops);
+  assert.equal(b.planWeek(pool, picked, '2026-11-30', S).bounty.boss, 'Zuk');
+  assert.equal(b.planWeek(pool, [], '2026-12-07', S).bounty.boss !== undefined, true);
+});
+
+test('cooldown is per boss: a boss used in the last 8 weeks is skipped, even as another task', () => {
+  const pool = b.parseBounties([
+    { boss: 'Nakatra', parts: ['Kerapac'], active: true },
+    { boss: 'nakatra ', parts: ['Nex'], active: true }, // same boss, other task
+    { boss: 'Vorago', parts: ['Nex'], active: true },
+    { boss: 'Empty', parts: [''], active: true },      // no parts: never used
+    { boss: 'Off', parts: ['Nex'], active: false }
+  ], drops);
+  const h = b.parseBounties([hist('2026-10-05', 'Nakatra')], drops); // 8 weeks before 11-30
+  assert.deepEqual(b.eligiblePool(pool, h, '2026-11-30', S).map(p => p.boss), ['Vorago']);
+  // 9 weeks later it may come back.
+  assert.deepEqual(b.eligiblePool(pool, h, '2026-12-07', S).map(p => p.boss), ['Nakatra', 'nakatra', 'Vorago']);
+});
+
+test('everything cooling down: the boss used longest ago comes back', () => {
+  const pool = poolOf(['A', 'B', 'C']);
+  const h = b.parseBounties([hist('2026-11-02', 'B'), hist('2026-11-09', 'C'), hist('2026-11-16', 'A')], drops);
+  assert.deepEqual(b.eligiblePool(pool, h, '2026-11-23', S).map(p => p.boss), ['B']);
+});
+
+test('pick choices: random, no repeats, at most Pick_Options', () => {
+  const pool = poolOf(Array.from({ length: 30 }, (_, i) => `Boss${i}`));
+  const choices = b.pickChoices(pool, [], '2026-11-30', S);
+  assert.equal(choices.length, 20);
+  assert.equal(new Set(choices.map(c => c.boss)).size, 20);
+});
+
+test('history row is a full copy of the bounty with who chose it', () => {
+  const [p] = b.parseBounties([{ boss: 'Telos', parts: ['Nex', '', ''], firstPoints: 15, laterPoints: 10, active: true }], drops);
+  assert.deepEqual(b.historyRow(p, '2026-11-30', { chosenBy: 'Donini', chosenById: '1' }), {
+    weekOf: '2026-11-30', boss: 'Telos', firstPoints: 15, laterPoints: 10, parts: ['Nex', '', ''],
+    codeWord: '', chosenBy: 'Donini', chosenById: '1'
+  });
+});
+
+test('shop: Delivered How "pick" marks the pick item', () => {
+  const [pick] = b.parseShop([{ item: "Pick next week's bounty", cost: 50, stock: '', active: true, deliveredHow: 'pick' }]);
+  assert.equal(pick.isPick, true);
+  assert.equal(pick.isWheel, false);
 });
 
 test('message id from link or id', () => {

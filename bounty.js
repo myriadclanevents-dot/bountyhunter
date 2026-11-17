@@ -57,7 +57,11 @@ function readSettings(raw = {}) {
     lateClaimHours: Math.max(0, num(raw.Late_Claim_Hours, 0)),
     lastMonthlyPost: str(raw.Last_Monthly_Post),
     wheelChannelId: str(raw.Wheel_Channel_ID),
-    adminLogChannelId: str(raw.Admin_Log_Channel_ID) || str(raw.Shop_Admin_Channel_ID)
+    adminLogChannelId: str(raw.Admin_Log_Channel_ID) || str(raw.Shop_Admin_Channel_ID),
+    // Random order: a boss can't come back until this many weeks have passed.
+    repeatCooldownWeeks: Math.max(0, Math.floor(num(raw.Repeat_Cooldown_Weeks, 8))),
+    // "Pick next week's bounty": how many bounties the buyer chooses from (Discord allows 25 max).
+    pickOptions: Math.min(25, Math.max(1, Math.floor(num(raw.Pick_Options, 20))))
   };
 }
 
@@ -206,6 +210,9 @@ function parseBounty(row, drops) {
     postedAt: Number(row.postedAt) || null,
     messageId: str(row.messageId),
     codeWord: str(row.codeWord),
+    chosenBy: str(row.chosenBy),
+    chosenById: str(row.chosenById),
+    rawParts: (row.parts || []).map(str),
     warnings: parts.flatMap(p => p.warnings)
   };
 }
@@ -236,20 +243,96 @@ function openBounties(bounties, now, settings) {
     .reverse();
 }
 
-/** The bounty that should go up now, if any (this Monday's, not yet posted, time reached). */
-function dueBounty(bounties, now, settings) {
-  const weekOf = mondayOf(now);
-  const row = bounties.find(b => b.weekOf === weekOf && b.active && !b.postedAt);
-  if (!row) return null;
-  return now >= scheduledPostTime(weekOf, settings) ? row : null;
+// ---------------------------------------------------------------------------
+// Random order
+//
+// "history" = the History tab (one row per week: posted, or picked by a
+// player and waiting for Monday). "pool" = the Bounties tab (the list of
+// bounties to choose from; Week Of is optional and forces that week).
+// ---------------------------------------------------------------------------
+
+const addDays = (iso, n) => isoDate(dayMs(iso) + n * DAY);
+const bossKey = name => str(name).toLowerCase().replace(/\s+/g, ' ');
+
+/** A week is covered once a bounty for it (or a later week, posted early) is up. */
+const weekCovered = (history, weekOf) => history.some(h => h.postedAt && h.weekOf >= weekOf);
+
+/** The first week that still needs a bounty: this week, or later if already covered. */
+function nextOpenWeek(history, now) {
+  let week = mondayOf(now);
+  for (let i = 0; i < 520 && weekCovered(history, week); i++) week = addDays(week, 7);
+  return week;
 }
 
-/** For /bhpost: this week's unposted bounty, else the next one coming up. */
-function nextUnposted(bounties, now) {
-  const thisMonday = mondayOf(now);
-  return bounties
-    .filter(b => b.active && !b.postedAt && b.weekOf >= thisMonday && b.parts.length)
-    .sort((a, b) => a.weekOf.localeCompare(b.weekOf))[0] || null;
+/** The week whose bounty should go up right now, if any (its random Monday time reached). */
+function dueWeek(history, now, settings) {
+  const week = mondayOf(now);
+  if (weekCovered(history, week)) return null;
+  return now >= scheduledPostTime(week, settings) ? week : null;
+}
+
+/** A player's pick waiting for that week. */
+const pickedFor = (history, weekOf) => history.find(h => h.weekOf === weekOf && !h.postedAt) || null;
+
+const usablePool = pool => pool.filter(p => p.active && p.parts.length);
+
+/**
+ * Bounties that may go up in a week: bosses NOT used in the previous
+ * Repeat_Cooldown_Weeks weeks. If every boss is cooling down, the ones used
+ * longest ago, so there is always a bounty.
+ */
+function eligiblePool(pool, history, weekOf, settings) {
+  const usable = usablePool(pool);
+  const from = addDays(weekOf, -7 * settings.repeatCooldownWeeks);
+  const recent = new Set(history.filter(h => h.weekOf < weekOf && h.weekOf >= from).map(h => bossKey(h.boss)));
+  const fresh = usable.filter(p => !recent.has(bossKey(p.boss)));
+  if (fresh.length || !usable.length) return fresh;
+  const last = new Map();
+  for (const h of history) {
+    const k = bossKey(h.boss);
+    if (h.weekOf < weekOf && (last.get(k) || '') < h.weekOf) last.set(k, h.weekOf);
+  }
+  const lastOf = p => last.get(bossKey(p.boss)) || '';
+  const oldest = usable.map(lastOf).sort()[0];
+  return usable.filter(p => lastOf(p) === oldest);
+}
+
+function shuffled(list, rand = Math.random) {
+  const out = [...list];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
+/**
+ * What goes up in a week: a player's pick, else a Bounties row with that
+ * Week Of (forced by an admin), else a random eligible bounty.
+ */
+function planWeek(pool, history, weekOf, settings, rand = Math.random) {
+  const picked = pickedFor(history, weekOf);
+  if (picked) return { bounty: picked, source: 'picked' };
+  const forced = usablePool(pool).find(p => p.weekOf === weekOf);
+  if (forced) return { bounty: forced, source: 'forced' };
+  const eligible = eligiblePool(pool, history, weekOf, settings);
+  if (!eligible.length) return null;
+  return { bounty: eligible[Math.floor(rand() * eligible.length)], source: 'random' };
+}
+
+/** The bounties a "Pick next week's bounty" buyer chooses from. */
+const pickChoices = (pool, history, weekOf, settings, rand = Math.random) =>
+  shuffled(eligiblePool(pool, history, weekOf, settings), rand).slice(0, settings.pickOptions);
+
+/** The History row for a bounty going up in `weekOf` (a copy, so editing the Bounties tab later changes nothing). */
+function historyRow(bounty, weekOf, extra = {}) {
+  return {
+    weekOf, boss: bounty.boss,
+    firstPoints: bounty.firstPoints ?? '', laterPoints: bounty.laterPoints ?? '',
+    parts: bounty.rawParts || [], codeWord: bounty.codeWord || '',
+    chosenBy: bounty.chosenBy || '', chosenById: bounty.chosenById || '',
+    ...extra
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -469,7 +552,9 @@ function parseShop(rows) {
       active: r.active === true || /^(true|yes|1|x|✓|✔)$/i.test(str(r.active)),
       description: str(r.description),
       // "wheel" in Delivered How = buying it spins the prize wheel.
-      isWheel: /^wheel$/i.test(str(r.deliveredHow))
+      isWheel: /^wheel$/i.test(str(r.deliveredHow)),
+      // "pick" in Delivered How = the buyer chooses next week's bounty (1 per week; the bot keeps that stock).
+      isPick: /^pick$/i.test(str(r.deliveredHow))
     };
   }).filter(r => r.item && r.cost > 0);
 }
@@ -562,7 +647,8 @@ module.exports = {
   num, readSettings,
   isoDate, dayMs, mondayOf, monthKey, monthRange, hash, scheduledPostTime, CODE_WORDS, codeWordFor,
   parsePart, describePart, parseBounty, parseBounties,
-  postedBounties, currentBounty, closesAt, openBounties, dueBounty, nextUnposted,
+  postedBounties, currentBounty, closesAt, openBounties,
+  addDays, bossKey, weekCovered, nextOpenWeek, dueWeek, pickedFor, usablePool, eligiblePool, shuffled, planWeek, pickChoices, historyRow,
   activeSubmissions, isMessageApproved, progressFor, isComplete, assignPart, bountyItems, inProgressCount,
   claimRef, uniquePoints, activeClaims, multiplierStartsAt, multiplierActive, claimPoints,
   balances, playerNames, standings, rankOf, playerSummary,

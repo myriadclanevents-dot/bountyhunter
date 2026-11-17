@@ -68,16 +68,29 @@ var TABS = {
     ['claims', 'Claims', '', 'Bounties completed'],
     ['firsts', 'First Claims', '', 'Bounties claimed first']
   ]},
+  // The LIST of bounties. The bot picks one at random each week (see History).
   bounties: { name: 'Bounties', cols: [
-    ['weekOf', 'Week Of', 'day', ''],
+    ['weekOf', 'Week Of', 'day', 'OPTIONAL. Leave EMPTY: the bot picks bounties in random order\n(a boss never comes back within Repeat_Cooldown_Weeks weeks).\nType a Monday date to force this bounty that week.'],
     ['boss', 'Boss', '', ''],
     ['firstPoints', 'First Points', '', ''],
     ['laterPoints', 'Later Points', '', ''],
-    ['active', 'Active', '', ''],
+    ['active', 'Active', '', 'TRUE = can be picked. FALSE = skipped'],
     ['notes', 'Notes', '', ''],
-    ['codeWord', 'Code Word', '', 'Word players must show in every screenshot (e.g. typed in game chat).\nLeave EMPTY and the bot picks a secret one when it posts the bounty.\nType your own to choose it — keep it secret until Monday!'],
-    ['postedAt', 'Posted At (UTC)', 'date', 'BOT FILLS THIS — leave empty'],
-    ['messageId', 'Message ID', 'id', 'BOT FILLS THIS — leave empty']
+    ['codeWord', 'Code Word', '', 'Usually leave EMPTY: the bot picks a new secret word every week.\nA word typed here is used EVERY time this bounty comes up.']
+  ]},
+  // One row per week, written by the bot: what went up (a copy), or a player's pick waiting for Monday.
+  history: { name: 'History', cols: [
+    ['weekOf', 'Week Of', 'day', 'Which week (its Monday)'],
+    ['boss', 'Boss', '', ''],
+    ['firstPoints', 'First Points', '', ''],
+    ['laterPoints', 'Later Points', '', ''],
+    ['part1', 'Part 1', '', ''], ['part2', 'Part 2', '', ''], ['part3', 'Part 3', '', ''],
+    ['part4', 'Part 4', '', ''], ['part5', 'Part 5', '', ''], ['part6', 'Part 6', '', ''],
+    ['codeWord', 'Code Word', '', ''],
+    ['chosenBy', 'Chosen By', '', 'Player who bought "Pick next week\'s bounty" (empty = random)'],
+    ['chosenById', 'Chosen By ID', 'id', 'Discord user id of that player'],
+    ['postedAt', 'Posted At (UTC)', 'date', 'Empty = a pick waiting for Monday'],
+    ['messageId', 'Message ID', 'id', 'The bounty post']
   ]},
   shop: { name: 'Shop', cols: [
     ['item', 'Item', '', ''], ['cost', 'Cost', '', ''], ['stock', 'Stock', '', ''],
@@ -106,6 +119,8 @@ function doGet(e) {
     var config = {
       ok: true,
       bounties: readBounties_(),
+      // null (not []) while the History tab doesn't exist yet: the bot then never posts.
+      history: SpreadsheetApp.getActiveSpreadsheet().getSheetByName(TABS.history.name) ? readTab_(TABS.history) : null,
       drops: readTab_(TABS.drops),
       shop: readTab_(TABS.shop),
       wheel: readTab_(TABS.wheel),
@@ -307,21 +322,34 @@ function buy_(p) {
     var active = map.active ? values[i][map.active - 1] : true;
     if (!(active === true || /^(true|yes|1|x)$/i.test(String(active)))) return { ok: false, error: 'that item is not for sale right now' };
     var cost = Number(String(values[i][map.cost - 1]).replace(',', '.'));
-    var stockCell = map.stock ? values[i][map.stock - 1] : '';
+    // "Pick next week's bounty": 1 per week, checked here (the Stock cell is not used).
+    var stockCell = map.stock && !p.pick ? values[i][map.stock - 1] : '';
     var stock = stockCell === '' ? null : Number(stockCell);
     if (stock !== null && stock <= 0) return { ok: false, error: 'sold out' };
+    if (p.pick && findRow_(TABS.history, 'weekOf', p.pick.weekOf)) return { ok: false, error: 'someone already picked the bounty for that week' };
     var wallet = walletOf_(p.playerId);
     if (wallet < cost) return { ok: false, error: 'not enough points (wallet ' + wallet + ', cost ' + cost + ')' };
     if (stock !== null) sh.getRange(i + 2, map.stock).setValue(stock - 1);
 
     var time = Number(p.time) || Date.now();
-    var purchase = { id: 'P' + time, time: time, player: p.player, playerId: p.playerId, item: String(values[i][map.item - 1]), cost: cost };
+    var itemName = String(values[i][map.item - 1]);
+    var purchase = { id: 'P' + time, time: time, player: p.player, playerId: p.playerId, item: itemName, cost: cost };
+    var history = null;
+    if (p.pick) {
+      // The boss goes in the Purchases tab (admins) only, never in Points (players see that in /bhme).
+      purchase.item += ': ' + p.pick.boss + ' (week of ' + p.pick.weekOf + ')';
+      purchase.deliveredBy = 'Bot (automatic)';
+      purchase.deliveredAt = time;
+      history = historyFields_(p.pick);
+      appendObj_(TABS.history, history);
+      history.parts = p.pick.parts || [];
+    }
     appendObj_(TABS.purchases, purchase);
-    var points = { time: time, player: p.player, playerId: p.playerId, change: -cost, type: 'shop', detail: purchase.item, by: '', ref: purchase.id, opId: p.opId || purchase.id };
+    var points = { time: time, player: p.player, playerId: p.playerId, change: -cost, type: 'shop', detail: itemName, by: '', ref: purchase.id, opId: p.opId || purchase.id };
     appendObj_(TABS.points, points);
     var win = wheelWin_(p, purchase);
     return { ok: true, purchase: purchase, points: points, stockLeft: stock === null ? null : stock - 1,
-      wheelPoints: win.wheelPoints || null, wheelPurchase: win.wheelPurchase || null };
+      wheelPoints: win.wheelPoints || null, wheelPurchase: win.wheelPurchase || null, history: history };
   }
   return { ok: false, error: 'no shop item called ' + p.item };
 }
@@ -365,16 +393,26 @@ function setFields_(found, spec, fields) {
   });
 }
 
+/** A bounty (with a parts list) as History columns (Part 1…Part 6). */
+function historyFields_(row) {
+  var out = {};
+  TABS.history.cols.forEach(function (c) { if (c[0] in row) out[c[0]] = row[c[0]]; });
+  (row.parts || []).slice(0, 6).forEach(function (part, i) { out['part' + (i + 1)] = part; });
+  return out;
+}
+
+/** A bounty went up: fills in its History row (a player's pick) or adds one. */
 function bountyPosted_(p) {
-  var found = findRow_(TABS.bounties, 'weekOf', p.weekOf);
-  if (!found) return { ok: false, error: 'no Bounties row for week ' + p.weekOf };
-  var fields = { postedAt: p.postedAt, messageId: p.messageId };
-  // Never overwrite a code word an admin typed in.
-  if (p.codeWord && found.map.codeWord &&
+  var row = p.row || {};
+  if (!row.weekOf) return { ok: false, error: 'no week given' };
+  var found = findRow_(TABS.history, 'weekOf', row.weekOf);
+  if (!found) { appendObj_(TABS.history, historyFields_(row)); return { ok: true }; }
+  var fields = { postedAt: row.postedAt, messageId: row.messageId };
+  if (row.codeWord && found.map.codeWord &&
       String(found.sh.getRange(found.row, found.map.codeWord).getValue()).trim() === '') {
-    fields.codeWord = p.codeWord;
+    fields.codeWord = row.codeWord;
   }
-  setFields_(found, TABS.bounties, fields);
+  setFields_(found, TABS.history, fields);
   return { ok: true };
 }
 
@@ -424,6 +462,8 @@ function setupBountyHunter() {
   makeDrops_(ss);
   makeWheel_(ss);
   addWheelSettings_();
+  var migrated = migrateToRandomOrder_(ss);
+  addRandomOrderSettings_();
   // Bot tabs: create if missing (with their full column set).
   ['submissions', 'points', 'purchases', 'players'].forEach(function (k) {
     var spec = TABS[k];
@@ -462,7 +502,82 @@ function setupBountyHunter() {
     readMe.getRange(13, 1).setValue('Drops tab = every unique per boss. In Bounties, a boss name in a Part cell means "any drop from that boss". "2 of: Kerapac, Nex" = any 2 different items from either boss.');
   }
 
-  SpreadsheetApp.getUi().alert('Bounty Hunter sheet updated. Next: Deploy → New deployment → Web app.');
+  SpreadsheetApp.getUi().alert('Bounty Hunter sheet updated.' +
+    (migrated ? '\n\nRandom order is ON: the History tab was added, the Week Of dates in Bounties were cleared, ' +
+      'and posted weeks were moved to History.' : '') +
+    '\n\nNext: Deploy → Manage deployments → ✏️ edit → Version: New version → Deploy.');
+}
+
+/**
+ * ONE TIME (only while there is no History tab): switches to random order.
+ *  - adds the History tab (one row per week, written by the bot)
+ *  - copies every posted week from Bounties into History
+ *  - clears Week Of in Bounties (empty = random order) and removes the old
+ *    Posted At / Message ID columns (that info now lives in History)
+ *  - marks the "Pick next week's bounty" shop item (Delivered How = pick)
+ */
+function migrateToRandomOrder_(ss) {
+  if (ss.getSheetByName(TABS.history.name)) return false;
+  // A posted bounty needs its week: claims and submissions are saved under it.
+  var OLD_CHECK = { name: TABS.bounties.name, cols: TABS.bounties.cols.concat([['postedAt', 'Posted At (UTC)', 'date', '']]) };
+  var undated = readTab_(OLD_CHECK).filter(function (r) { return r.postedAt && !r.weekOf; });
+  if (undated.length) {
+    throw new Error('Not changed: the posted bounty "' + undated[0].boss + '" has an empty Week Of. ' +
+      'Type its week back in (the Monday its claims use, e.g. 23/11/2026 for Araxxor) and run setupBountyHunter again.');
+  }
+  var hist = sheet_(TABS.history);
+  hist.protect().setDescription('Written by the bot — do not edit by hand').setWarningOnly(true);
+  hist.setTabColor('#9AA2B3');
+
+  var b = ss.getSheetByName(TABS.bounties.name);
+  if (b && b.getLastRow() >= 2) {
+    var OLD = { name: TABS.bounties.name, cols: TABS.bounties.cols.concat([
+      ['postedAt', 'Posted At (UTC)', 'date', ''], ['messageId', 'Message ID', 'id', '']]) };
+    var rows = readBounties_();   // with parts
+    var old = readTab_(OLD);      // same rows, with Posted At / Message ID
+    var map = columns_(b, OLD, false);
+    var rowNums = [];
+    b.getRange(2, 1, b.getLastRow() - 1, b.getLastColumn()).getValues()
+      .forEach(function (r, i) { if (r.join('') !== '') rowNums.push(i + 2); });
+    rows.forEach(function (r, i) {
+      if (!old[i] || !old[i].postedAt) return;
+      appendObj_(TABS.history, historyFields_({
+        weekOf: r.weekOf, boss: r.boss, firstPoints: r.firstPoints, laterPoints: r.laterPoints, parts: r.parts,
+        codeWord: r.codeWord, postedAt: old[i].postedAt, messageId: old[i].messageId }));
+      if (map.codeWord) b.getRange(rowNums[i], map.codeWord).setValue(''); // that word was used: don't reuse it
+    });
+    if (map.weekOf) {
+      b.getRange(2, map.weekOf, b.getLastRow() - 1, 1).clearContent();
+      b.getRange(1, map.weekOf).setNote(TABS.bounties.cols[0][3]);
+    }
+    if (map.codeWord) b.getRange(1, map.codeWord).setNote(TABS.bounties.cols[6][3]);
+    if (map.active) b.getRange(1, map.active).setNote(TABS.bounties.cols[4][3]);
+    [map.messageId, map.postedAt].filter(Boolean).sort(function (x, y) { return y - x; })
+      .forEach(function (c) { b.deleteColumn(c); });
+  }
+
+  var shop = ss.getSheetByName(TABS.shop.name);
+  if (shop && shop.getLastRow() >= 2) {
+    var smap = columns_(shop, TABS.shop, true);
+    var vals = shop.getRange(2, 1, shop.getLastRow() - 1, shop.getLastColumn()).getValues();
+    vals.forEach(function (r, i) {
+      if (!/pick next week/i.test(String(r[smap.item - 1]))) return;
+      shop.getRange(i + 2, smap.deliveredHow).setValue('pick');
+      if (smap.stock) shop.getRange(i + 2, smap.stock).setValue(''); // the bot allows 1 per week by itself
+    });
+  }
+  return true;
+}
+
+function addRandomOrderSettings_() {
+  if (!findRow_(TABS.settings, 'key', 'Repeat_Cooldown_Weeks')) {
+    appendObj_(TABS.settings, { key: 'Repeat_Cooldown_Weeks', value: '8',
+      meaning: 'Random order: number of WEEKS before the same boss can come back (also for a different task of that boss). Default 8' });
+  }
+  if (!findRow_(TABS.settings, 'key', 'Pick_Options')) {
+    appendObj_(TABS.settings, { key: 'Pick_Options', value: '20',
+      meaning: '"Pick next week\'s bounty": how many random bounties the buyer chooses from (a number from 1 to 25). Default 20' });
+  }
 }
 
 function header_(sh, cols, color) {

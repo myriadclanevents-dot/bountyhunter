@@ -14,12 +14,17 @@ let available = false;
 let degraded = false;
 
 const state = {
-  bountyRows: [], drops: [], shopRows: [], wheelRows: [], approvers: [], rawSettings: {},
+  bountyRows: [], historyRows: [], drops: [], shopRows: [], wheelRows: [], approvers: [], rawSettings: {},
   submissions: [], points: [], purchases: []
 };
 
 // Derived (re-parsed whenever config changes).
+// bounties = the History tab (one row per week: posted, or picked and waiting).
+// pool     = the Bounties tab (the list the bot picks from).
 let bounties = [];
+let pool = [];
+let hasHistory = false; // false = the sheet still runs the old Apps Script (no History tab): never post
+const justWritten = new Map(); // weekOf -> when the bot wrote its History row
 let shop = [];
 let wheel = [];
 let settings = b.readSettings({});
@@ -42,6 +47,8 @@ async function request(target, options = {}) {
 
 function applyConfig(body) {
   if (Array.isArray(body.bounties)) state.bountyRows = body.bounties;
+  hasHistory = Array.isArray(body.history);
+  if (hasHistory) state.historyRows = body.history;
   if (Array.isArray(body.drops)) state.drops = body.drops.filter(d => d.boss && d.item).map(d => ({ boss: String(d.boss).trim(), item: String(d.item).trim() }));
   if (Array.isArray(body.shop)) state.shopRows = body.shop;
   if (Array.isArray(body.wheel)) state.wheelRows = body.wheel;
@@ -51,19 +58,35 @@ function applyConfig(body) {
   settings = b.readSettings(state.rawSettings);
   // Keep posting info the bot wrote but the sheet read may not show yet.
   const previous = new Map(bounties.map(x => [x.weekOf, x]));
-  bounties = b.parseBounties(state.bountyRows, state.drops).map(row => {
+  bounties = b.parseBounties(state.historyRows.map(historyToBounty), state.drops).map(row => {
     const old = previous.get(row.weekOf);
     if (old && old.postedAt && !row.postedAt) return { ...row, postedAt: old.postedAt, messageId: old.messageId };
     return row;
   });
+  // Rows the bot wrote minutes ago that the sheet read doesn't show yet.
+  // (Older rows missing from the sheet were deleted by an admin on purpose.)
+  for (const old of previous.values()) {
+    const fresh = Date.now() - (justWritten.get(old.weekOf) || 0) < 10 * 60 * 1000;
+    if (fresh && !bounties.some(x => x.weekOf === old.weekOf)) bounties.push(old);
+  }
+  pool = b.parseBounties(state.bountyRows, state.drops).filter(x => x.boss || x.parts.length);
   shop = b.parseShop(state.shopRows);
   wheel = b.parseWheel(state.wheelRows);
 }
 
+const PART_FIELDS = ['part1', 'part2', 'part3', 'part4', 'part5', 'part6'];
+
+/** A History row (Part 1…Part 6 columns) in the same shape as a Bounties row. */
+function historyToBounty(r) {
+  const parts = Array.isArray(r.parts) ? r.parts : PART_FIELDS.map(f => r[f] ?? '');
+  return { ...r, parts, active: true };
+}
+
 function warnings() {
   const out = [];
-  for (const x of bounties) for (const w of x.warnings) out.push(`Bounty ${x.weekOf} (${x.boss}): ${w}`);
-  for (const x of bounties) if (x.active && !x.parts.length) out.push(`Bounty ${x.weekOf} (${x.boss}) has no parts filled in`);
+  if (!hasHistory) out.push('The sheet has no History tab yet: paste the new Apps Script, run setupBountyHunter, redeploy. Nothing is posted until then.');
+  for (const x of pool) for (const w of x.warnings) out.push(`Bounty ${x.boss}: ${w}`);
+  for (const x of pool) if (x.active && !x.parts.length) out.push(`Bounty ${x.boss || '(no boss name)'} has no parts filled in, so it is never picked`);
   return out;
 }
 
@@ -77,7 +100,7 @@ async function loadAll() {
     state.purchases = body.purchases || [];
     available = true;
     degraded = false;
-    console.log(`✅ Sheet loaded: ${bounties.length} bounties, ${state.drops.length} drops, ${shop.length} shop items, ` +
+    console.log(`✅ Sheet loaded: ${b.usablePool(pool).length} bounties to pick from, ${bounties.length} weeks of history, ${state.drops.length} drops, ${shop.length} shop items, ` +
       `${state.approvers.length} approvers, ${state.submissions.length} submissions, ${state.points.length} points rows.`);
     warnings().forEach(w => console.warn(`⚠️ ${w}`));
     return true;
@@ -137,9 +160,10 @@ async function addPoints(row) {
 
 /** Buying is checked and written by the sheet in one locked step (stock + wallet). */
 /** For a wheel item, `wheelPrize` (already picked by the bot) is saved in the same step. */
-async function buy({ item, player, playerId, wheelPrize = null }) {
+/** For "Pick next week's bounty", `pick` (a History row) is saved in the same step; the sheet refuses a 2nd pick for that week. */
+async function buy({ item, player, playerId, wheelPrize = null, pick = null }) {
   const wheel = wheelPrize ? { prize: wheelPrize.prize, kind: wheelPrize.kind, points: wheelPrize.points } : null;
-  const res = await post({ action: 'buy', item, player, playerId, time: Date.now(), opId: newOpId(), wheel });
+  const res = await post({ action: 'buy', item, player, playerId, time: Date.now(), opId: newOpId(), wheel, pick });
   if (res.ok) {
     state.purchases.push(res.purchase);
     state.points.push(res.points);
@@ -148,16 +172,27 @@ async function buy({ item, player, playerId, wheelPrize = null }) {
     const row = state.shopRows.find(r => String(r.item).trim().toLowerCase() === String(res.purchase.item).trim().toLowerCase());
     if (row && res.stockLeft !== null && res.stockLeft !== undefined) row.stock = res.stockLeft;
     shop = b.parseShop(state.shopRows);
+    if (pick) {
+      if (!res.history) return { ok: false, charged: true, error: 'the sheet runs an old Apps Script version (redeploy it). Ask an admin to refund your points' };
+      state.historyRows.push(res.history);
+      bounties.push(b.parseBounty(historyToBounty(res.history), state.drops));
+      justWritten.set(res.history.weekOf, Date.now());
+    }
   }
   return res;
 }
 
-async function markPosted(weekOf, postedAt, messageId, codeWord = "") {
-  const bounty = bounties.find(x => x.weekOf === weekOf);
-  if (bounty) { bounty.postedAt = postedAt; bounty.messageId = messageId; bounty.codeWord = bounty.codeWord || codeWord; }
-  const row = state.bountyRows.find(r => String(r.weekOf) === weekOf);
-  if (row) { row.postedAt = postedAt; row.messageId = messageId; row.codeWord = row.codeWord || codeWord; }
-  return post({ action: "bountyPosted", weekOf, postedAt, messageId, codeWord }, { retry: true });
+/** Saves a posted bounty in the History tab (adds its row, or fills in the row of a player's pick). */
+async function markPosted(bounty, postedAt, messageId, codeWord = '') {
+  const row = b.historyRow(bounty, bounty.weekOf, { codeWord: bounty.codeWord || codeWord, postedAt, messageId });
+  const mem = bounties.find(x => x.weekOf === bounty.weekOf);
+  if (mem) Object.assign(mem, { postedAt, messageId, codeWord: mem.codeWord || codeWord });
+  else bounties.push({ ...b.parseBounty(historyToBounty(row), state.drops), postedAt, messageId });
+  const raw = state.historyRows.find(r => String(r.weekOf) === bounty.weekOf);
+  if (raw) Object.assign(raw, { postedAt, messageId, codeWord: raw.codeWord || codeWord });
+  else state.historyRows.push(row);
+  justWritten.set(bounty.weekOf, Date.now());
+  return post({ action: 'bountyPosted', row }, { retry: true });
 }
 
 async function setPurchaseMessage(id, adminMessageId) {
@@ -187,6 +222,8 @@ module.exports = {
   isAvailable: () => available,
   isDegraded: () => degraded,
   getBounties: () => bounties,
+  getPool: () => pool,
+  hasHistory: () => hasHistory,
   getShop: () => shop,
   getWheel: () => wheel,
   getSettings: () => settings,

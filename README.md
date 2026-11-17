@@ -9,8 +9,10 @@ event bot (bingo / drop race) is live.
 
 | Where | What happens |
 |---|---|
-| **Bounties** tab | One row per Monday. Each `Part` cell = one requirement. |
-| Monday, random hour (UTC) | Bot posts the bounty in `Board_Channel_ID` and pins it. The previous one closes (or stays open `Late_Claim_Hours` longer). |
+| **Bounties** tab | The **list** of bounties (one row each, same boss may appear twice with different tasks). Each `Part` cell = one requirement. `Week Of` is optional: empty = random order; a Monday date forces that bounty that week. |
+| Monday, random hour (UTC) | Bot picks the week's bounty: a player's pick, else a forced `Week Of` row, else a **random** active row whose boss was not used in the last `Repeat_Cooldown_Weeks` weeks (default 8; if all are cooling down, the one used longest ago). It posts it in `Board_Channel_ID`, pins it, and writes the week into the **History** tab. The previous one closes (or stays open `Late_Claim_Hours` longer). |
+| **History** tab (bot) | One row per week: a full copy of the bounty that went up, its code word, post time, and `Chosen By` for picks. A row with no `Posted At` = a pick waiting for Monday. |
+| Pick next week's bounty | A Shop item with **Delivered How = `pick`**. The buyer chooses from `Pick_Options` (default 20) random eligible bounties, sees parts + points, confirms, then pays. 1 per week (the bot keeps that stock, the Stock cell is ignored). Public note pings the buyer but keeps the boss secret until Monday; the shop admin channel gets an info post (nothing to deliver). Undo = delete the History row + `/bhgive` the points back. |
 | `Submissions_Channel_ID` | Player posts a screenshot **with the item name in the message**. An approver reacts with `Approve_Emoji` (✅). Bot reacts 🎯 and replies with progress. |
 | All parts done | Claim: first player gets `First Points`, later players `Later Points` (one claim per player). |
 | 72 h with no claim | First claim × `Multiplier` (judged by when the finishing screenshot was **posted**). |
