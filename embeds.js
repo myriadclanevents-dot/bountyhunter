@@ -25,6 +25,9 @@ function weekLabel(weekOf) {
   return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
 }
 
+/** The week a bounty ran (the Monday of its post time). Week Of itself is only its id. */
+const shownWeek = bounty => (bounty.postedAt ? b.mondayOf(bounty.postedAt) : bounty.weekOf);
+
 function partFields(bounty) {
   return bounty.parts.map((p, i) => ({
     name: bounty.parts.length > 1 ? `Part ${i + 1}` : 'What counts',
@@ -105,7 +108,7 @@ function boardEmbed(bounty, view, settings, links = {}) {
 
   return {
     color,
-    author: { name: `🎯 BOUNTY · WEEK OF ${weekLabel(bounty.weekOf).toUpperCase()}` },
+    author: { name: `🎯 BOUNTY · WEEK OF ${weekLabel(shownWeek(bounty)).toUpperCase()}` },
     title: `${bounty.boss}${status}`,
     description,
     fields,
@@ -384,7 +387,7 @@ function helpEmbed(settings, { admin = false, pinned = false } = {}) {
     `To approve: react ${settings.approveEmoji} on the player's post. If the bot replies ❓, read why, fix it, then remove and re-add ${settings.approveEmoji}.`,
     '`/bhvoid` — undo an approved submission (paste its message link + a reason)',
     '`/bhgive` — add or remove points by hand (negative = remove; reason required)',
-    '`/bhpost` — post the next bounty now instead of waiting for Monday',
+    '`/bhpost` — post a bounty now. Before this Monday\'s post = that bounty (incl. a pick); after = an extra random one. Next Monday still comes as normal',
     'Bounties tab = the list the bot picks from at random. Leave **Week Of** empty; type a Monday date only to force a bounty that week. The History tab shows every week.',
     '`/bhreload` — re-read the Google Sheet now (it also refreshes on its own every 5 min)',
     'Every admin action is logged in the admin log channel.'
@@ -405,7 +408,7 @@ function helpEmbed(settings, { admin = false, pinned = false } = {}) {
 }
 
 module.exports = {
-  ts, weekLabel, bountyView, boardEmbed, progressEmbed, claimEmbed, multiplierEmbed, newBountyEmbed,
+  ts, weekLabel, shownWeek, bountyView, boardEmbed, progressEmbed, claimEmbed, multiplierEmbed, newBountyEmbed,
   table, leaderboardEmbed, monthlyWinnersEmbed, meEmbed, shopEmbed, confirmBuyEmbed, confirmPickEmbed, pickAdminEmbed, adminPurchaseEmbed, pastEmbed,
   wheelOddsText, spinFrameEmbed, adminLogEmbed, helpEmbed, GUIDE_TITLE
 };

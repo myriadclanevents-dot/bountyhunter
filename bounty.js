@@ -254,43 +254,59 @@ function openBounties(bounties, now, settings) {
 const addDays = (iso, n) => isoDate(dayMs(iso) + n * DAY);
 const bossKey = name => str(name).toLowerCase().replace(/\s+/g, ' ');
 
-/** A week is covered once a bounty for it (or a later week, posted early) is up. */
-const weekCovered = (history, weekOf) => history.some(h => h.postedAt && h.weekOf >= weekOf);
+// The History "Week Of" is the bounty's unique id (claims and submissions are
+// saved under it): the Monday for a normal post, the day for an extra /bhpost.
+// WHEN a bounty ran is always taken from its Posted At.
 
-/** The first week that still needs a bounty: this week, or later if already covered. */
+/** The day a bounty went up (a waiting pick: its id). */
+const ranOn = h => (h.postedAt ? isoDate(h.postedAt) : h.weekOf);
+
+/** A Monday is done once a bounty went up on or after it. An earlier /bhpost never skips a Monday. */
+const weekCovered = (history, weekOf) => history.some(h => h.postedAt && h.postedAt >= dayMs(weekOf));
+
+/** The next Monday that still needs its bounty: this week's, or next week's if this one is done. */
 function nextOpenWeek(history, now) {
   let week = mondayOf(now);
   for (let i = 0; i < 520 && weekCovered(history, week); i++) week = addDays(week, 7);
   return week;
 }
 
-/** The week whose bounty should go up right now, if any (its random Monday time reached). */
+/** The Monday whose bounty should go up right now, if any (its random time reached). */
 function dueWeek(history, now, settings) {
   const week = mondayOf(now);
   if (weekCovered(history, week)) return null;
   return now >= scheduledPostTime(week, settings) ? week : null;
 }
 
-/** A player's pick waiting for that week. */
-const pickedFor = (history, weekOf) => history.find(h => h.weekOf === weekOf && !h.postedAt) || null;
+/** An id not used yet: the date itself, else the next free day. */
+function freeKey(history, date) {
+  let key = date;
+  for (let i = 0; i < 366 && history.some(h => h.weekOf === key); i++) key = addDays(key, 1);
+  return key;
+}
+
+/** A player's pick waiting for the next Monday post (at most one at a time). */
+const waitingPick = history => history.find(h => !h.postedAt) || null;
 
 const usablePool = pool => pool.filter(p => p.active && p.parts.length);
 
 /**
- * Bounties that may go up in a week: bosses NOT used in the previous
- * Repeat_Cooldown_Weeks weeks. If every boss is cooling down, the ones used
- * longest ago, so there is always a bounty.
+ * Bounties that may go up on `date`: bosses that did NOT run in the previous
+ * Repeat_Cooldown_Weeks weeks (and not the boss of a waiting pick). If every
+ * boss is cooling down, the ones used longest ago, so there is always a bounty.
  */
-function eligiblePool(pool, history, weekOf, settings) {
+function eligiblePool(pool, history, date, settings) {
   const usable = usablePool(pool);
-  const from = addDays(weekOf, -7 * settings.repeatCooldownWeeks);
-  const recent = new Set(history.filter(h => h.weekOf < weekOf && h.weekOf >= from).map(h => bossKey(h.boss)));
+  const from = addDays(date, -7 * settings.repeatCooldownWeeks);
+  const recent = new Set(history
+    .filter(h => !h.postedAt || (ranOn(h) < date && ranOn(h) >= from))
+    .map(h => bossKey(h.boss)));
   const fresh = usable.filter(p => !recent.has(bossKey(p.boss)));
   if (fresh.length || !usable.length) return fresh;
   const last = new Map();
   for (const h of history) {
     const k = bossKey(h.boss);
-    if (h.weekOf < weekOf && (last.get(k) || '') < h.weekOf) last.set(k, h.weekOf);
+    if (h.postedAt && ranOn(h) < date && (last.get(k) || '') < ranOn(h)) last.set(k, ranOn(h));
   }
   const lastOf = p => last.get(bossKey(p.boss)) || '';
   const oldest = usable.map(lastOf).sort()[0];
@@ -307,20 +323,24 @@ function shuffled(list, rand = Math.random) {
 }
 
 /**
- * What goes up in a week: a player's pick, else a Bounties row with that
- * Week Of (forced by an admin), else a random eligible bounty.
+ * What goes up on `date`.
+ * Monday post (extra = false): a player's pick, else a Bounties row with that
+ * Week Of (forced by an admin), else random. Its id = that Monday (next free day if taken).
+ * Extra /bhpost (extra = true): always random; a waiting pick stays for Monday.
+ * Returns { bounty, source } with bounty.weekOf = its id, or null.
  */
-function planWeek(pool, history, weekOf, settings, rand = Math.random) {
-  const picked = pickedFor(history, weekOf);
+function planWeek(pool, history, date, settings, rand = Math.random, { extra = false } = {}) {
+  const picked = extra ? null : waitingPick(history);
   if (picked) return { bounty: picked, source: 'picked' };
-  const forced = usablePool(pool).find(p => p.weekOf === weekOf);
-  if (forced) return { bounty: forced, source: 'forced' };
-  const eligible = eligiblePool(pool, history, weekOf, settings);
+  const fresh = b => ({ ...b, weekOf: freeKey(history, date), postedAt: null, messageId: '', chosenBy: '', chosenById: '' });
+  const forced = extra ? null : usablePool(pool).find(p => p.weekOf === date);
+  if (forced) return { bounty: fresh(forced), source: 'forced' };
+  const eligible = eligiblePool(pool, history, date, settings);
   if (!eligible.length) return null;
-  return { bounty: eligible[Math.floor(rand() * eligible.length)], source: 'random' };
+  return { bounty: fresh(eligible[Math.floor(rand() * eligible.length)]), source: extra ? 'extra' : 'random' };
 }
 
-/** The bounties a "Pick next week's bounty" buyer chooses from. */
+/** The bounties a "Pick next week's bounty" buyer chooses from (for the Monday `weekOf`). */
 const pickChoices = (pool, history, weekOf, settings, rand = Math.random) =>
   shuffled(eligiblePool(pool, history, weekOf, settings), rand).slice(0, settings.pickOptions);
 
@@ -648,7 +668,7 @@ module.exports = {
   isoDate, dayMs, mondayOf, monthKey, monthRange, hash, scheduledPostTime, CODE_WORDS, codeWordFor,
   parsePart, describePart, parseBounty, parseBounties,
   postedBounties, currentBounty, closesAt, openBounties,
-  addDays, bossKey, weekCovered, nextOpenWeek, dueWeek, pickedFor, usablePool, eligiblePool, shuffled, planWeek, pickChoices, historyRow,
+  addDays, bossKey, ranOn, weekCovered, nextOpenWeek, dueWeek, freeKey, waitingPick, usablePool, eligiblePool, shuffled, planWeek, pickChoices, historyRow,
   activeSubmissions, isMessageApproved, progressFor, isComplete, assignPart, bountyItems, inProgressCount,
   claimRef, uniquePoints, activeClaims, multiplierStartsAt, multiplierActive, claimPoints,
   balances, playerNames, standings, rankOf, playerSummary,

@@ -113,7 +113,7 @@ const commands = [
     .addUserOption(o => o.setName('player').setDescription('Who').setRequired(true))
     .addIntegerOption(o => o.setName('amount').setDescription('Points (negative to remove)').setRequired(true).setMinValue(-1000).setMaxValue(1000))
     .addStringOption(o => o.setName('reason').setDescription('Shown in the Points tab').setRequired(true)),
-  new SlashCommandBuilder().setName('bhpost').setDescription("ADMIN: post the next bounty now instead of waiting for Monday"),
+  new SlashCommandBuilder().setName('bhpost').setDescription('ADMIN: post a bounty now (next Monday\'s bounty still comes as normal)'),
   new SlashCommandBuilder().setName('bhreload').setDescription('ADMIN: re-read the Google Sheet and refresh the bounty post'),
   new SlashCommandBuilder().setName('bhhelp').setDescription('How Bounty Hunter works and all its commands')
 ].map(c => c.toJSON());
@@ -244,23 +244,23 @@ const warnedPost = new Set();
 const warnedEmptyList = new Set();
 
 /**
- * Posts the bounty for a week: a player's pick, else a Bounties row forced to
- * that week, else a random one (no boss repeated within Repeat_Cooldown_Weeks).
+ * Monday post (`week` = that Monday): a player's pick, else a Bounties row
+ * forced to that week, else random (no boss repeated within Repeat_Cooldown_Weeks).
+ * Extra post (/bhpost after this Monday's bounty is up): random, NOW; it
+ * never moves next Monday and a waiting pick stays for Monday.
  */
-async function postWeek(week) {
+async function postWeek(week, { extra = false } = {}) {
   const history = sheet.getBounties();
-  if (b.weekCovered(history, week)) return { ok: false, error: 'that week already has a bounty' };
-  const plan = b.planWeek(sheet.getPool(), history, week, S(), fairRandom);
+  if (!extra && b.weekCovered(history, week)) return { ok: false, error: 'that week already has a bounty' };
+  const date = extra ? b.isoDate(now()) : week;
+  const plan = b.planWeek(sheet.getPool(), history, date, S(), fairRandom, { extra });
   if (!plan) {
-    if (!warnedEmptyList.has(week)) console.warn(`⚠️ Nothing to post for the week of ${week}: no active Bounties row has parts filled in. Last week's bounty stays open.`);
-    warnedEmptyList.add(week);
+    if (!warnedEmptyList.has(date)) console.warn(`⚠️ Nothing to post for ${date}: no active Bounties row has parts filled in. The current bounty stays open.`);
+    warnedEmptyList.add(date);
     return { ok: false, error: 'the Bounties tab has no active bounty with parts filled in' };
   }
-  const bounty = plan.source === 'picked'
-    ? plan.bounty
-    : { ...plan.bounty, weekOf: week, postedAt: null, messageId: '', chosenBy: '', chosenById: '' };
-  const res = await postBounty(bounty, plan.source);
-  return { ...res, bounty };
+  const res = await postBounty(plan.bounty, plan.source);
+  return { ...res, bounty: plan.bounty, extra };
 }
 
 async function postBounty(bounty, source = '') {
@@ -549,7 +549,7 @@ const handlers = {
     const rows = posted.map(x => {
       const claims = b.activeClaims(sheet.getPoints(), x.weekOf);
       const first = claims.find(c => String(c.type).toLowerCase() === b.TYPE_FIRST);
-      return `**${e.weekLabel(x.weekOf)}** · ${x.boss} — ${first ? `🥇 ${first.player} · ${claims.length} claims` : 'no claims'}`;
+      return `**${e.weekLabel(e.shownWeek(x))}** · ${x.boss} — ${first ? `🥇 ${first.player} · ${claims.length} claims` : 'no claims'}`;
     });
     return i.reply(ephemeral({ embeds: [e.pastEmbed(rows)] }));
   },
@@ -585,11 +585,17 @@ const handlers = {
     if (!(await needAdmin(i)) || !(await needSheet(i))) return;
     if (!sheet.hasHistory()) return i.reply(ephemeral({ content: '❌ The sheet has no History tab yet: paste the new Apps Script, run setupBountyHunter and redeploy it first.' }));
     await i.deferReply({ flags: MessageFlags.Ephemeral });
-    const res = await queue(() => postWeek(b.nextOpenWeek(sheet.getBounties(), now())));
+    // This Monday's bounty not up yet → post it now (pick / forced / random).
+    // Already up → an extra random bounty now; next Monday still comes as normal.
+    const res = await queue(() => {
+      const thisMonday = b.mondayOf(now());
+      return postWeek(thisMonday, { extra: b.weekCovered(sheet.getBounties(), thisMonday) });
+    });
     if (!res.ok) return i.editReply({ content: `❌ Not posted: ${res.error}` });
-    const what = `the **${res.bounty.boss}** bounty (week of ${e.weekLabel(res.bounty.weekOf)})`;
-    await logAdmin(i, 'bhpost', `Posted ${what} early: ${res.url}`);
-    return i.editReply({ content: `✅ Posted ${what}: ${res.url}` });
+    const next = e.weekLabel(b.nextOpenWeek(sheet.getBounties(), now()));
+    const what = `the **${res.bounty.boss}** bounty${res.bounty.chosenBy ? ` (picked by ${res.bounty.chosenBy})` : ''}`;
+    await logAdmin(i, 'bhpost', `Posted ${what} early: ${res.url}\nNext bounty: Monday ${next} as normal.`);
+    return i.editReply({ content: `✅ Posted ${what}: ${res.url}\nThe next bounty still goes up on **Monday ${next}**.` });
   },
 
   async bhreload(i) {
@@ -644,8 +650,7 @@ const done = content => ({ content, embeds: [], components: [] });
 
 /** The shop, with "Pick next week's bounty" sold out (1 per week) once that week is picked. */
 function shopItems() {
-  const history = sheet.getBounties();
-  const taken = Boolean(b.pickedFor(history, b.nextOpenWeek(history, now())));
+  const taken = Boolean(b.waitingPick(sheet.getBounties()));
   return sheet.getShop().map(it => (it.isPick ? { ...it, stock: taken ? 0 : 1 } : it));
 }
 
@@ -740,9 +745,9 @@ async function handleComponent(i) {
       const history = sheet.getBounties();
       const week = b.nextOpenWeek(history, now());
       if (week !== p.week) return { ok: false, error: 'the bounty for that week has just gone up. Run /bhbuy again' };
-      if (b.pickedFor(history, week)) return { ok: false, error: 'someone else just picked the bounty for that week' };
+      if (b.waitingPick(history)) return { ok: false, error: 'someone else just picked the next bounty' };
       return sheet.buy({ item: p.item, player, playerId: i.user.id,
-        pick: b.historyRow(p.choice, week, { chosenBy: player, chosenById: i.user.id }) });
+        pick: b.historyRow(p.choice, b.freeKey(history, week), { chosenBy: player, chosenById: i.user.id }) });
     });
     if (!res.ok) return i.editReply(done(`❌ Not bought: ${res.error}.${res.charged ? '' : ' Nothing was spent.'}`));
     playersDirty = true;
@@ -943,7 +948,7 @@ client.once(Events.ClientReady, async () => {
     `Awards: ${s.awardsChannelId || 'NOT SET'} · Shop admin: ${s.shopAdminChannelId || 'NOT SET'}`);
   if (sheet.hasHistory()) {
     const week = b.nextOpenWeek(sheet.getBounties(), now());
-    const picked = b.pickedFor(sheet.getBounties(), week);
+    const picked = b.waitingPick(sheet.getBounties());
     console.log(`🗓️ Next bounty: week of ${week}, due ${new Date(b.scheduledPostTime(week, s)).toISOString()} ` +
       `(${picked ? `${picked.boss}, picked by ${picked.chosenBy}` : `random from ${b.eligiblePool(sheet.getPool(), sheet.getBounties(), week, s).length} bounties`}).`);
   }

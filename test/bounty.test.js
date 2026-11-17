@@ -206,25 +206,43 @@ test('settings: cooldown 8 weeks and 20 pick options by default, capped at 25', 
   assert.equal(b.readSettings({ Repeat_Cooldown_Weeks: '3' }).repeatCooldownWeeks, 3);
 });
 
-test('a bounty posted early covers its week (no double post)', () => {
-  // Araxxor for the week of 11-23 went up on 11-15: nothing more on 11-16 or 11-23.
-  const h = b.parseBounties([hist('2026-11-23', 'Araxxor', { postedAt: Date.parse('2026-11-15T12:00:00Z') })], drops);
-  assert.equal(b.dueWeek(h, Date.parse('2026-11-17T23:00:00Z'), S), null);
-  assert.equal(b.dueWeek(h, Date.parse('2026-11-23T23:59:00Z'), S), null);
-  assert.equal(b.nextOpenWeek(h, Date.parse('2026-11-17T12:00:00Z')), '2026-11-30');
-  assert.equal(b.dueWeek(h, Date.parse('2026-12-06T23:00:00Z'), S), '2026-11-30');
+test('a Monday is done only by a bounty posted on/after it: an extra /bhpost never skips Monday', () => {
+  // Live data: Araxxor (id 11-23) went up Sun 11-15, Ghrazi (id 11-30) went up Tue 11-17.
+  const h = b.parseBounties([
+    hist('2026-11-23', 'Araxxor', { postedAt: Date.parse('2026-11-15T19:27:00Z') }),
+    hist('2026-11-30', 'Ghrazi', { postedAt: Date.parse('2026-11-17T21:57:00Z') })
+  ], drops);
+  assert.equal(b.dueWeek(h, Date.parse('2026-11-18T23:00:00Z'), S), null);       // this week is done
+  assert.equal(b.nextOpenWeek(h, Date.parse('2026-11-18T12:00:00Z')), '2026-11-23'); // NOT 7 Dec
+  assert.equal(b.dueWeek(h, Date.parse('2026-11-23T23:59:00Z'), S), '2026-11-23');
+  assert.equal(b.freeKey(h, '2026-11-23'), '2026-11-24'); // id 11-23 is Araxxor's: next free day
+  // An extra post on Wed 11-18 does not cover Monday 11-23.
+  const more = [...h, hist('2026-11-18', 'Vorago', { postedAt: Date.parse('2026-11-18T10:00:00Z') })];
+  assert.equal(b.nextOpenWeek(more, Date.parse('2026-11-18T12:00:00Z')), '2026-11-23');
 });
 
-test('plan: a player pick wins, then a forced Week Of, then random', () => {
+test('plan: a player pick wins, then a forced Week Of, then random; extra posts skip the pick', () => {
   const pool = b.parseBounties([
     { boss: 'Vorago', parts: ['Nex'], active: true },
     { boss: 'Telos', parts: ['Nex'], active: true, weekOf: '2026-11-30' }
   ], drops);
   assert.equal(b.planWeek(pool, [], '2026-11-30', S).source, 'forced');
   assert.equal(b.planWeek(pool, [], '2026-11-30', S).bounty.boss, 'Telos');
+  assert.equal(b.planWeek(pool, [], '2026-11-30', S).bounty.weekOf, '2026-11-30');
   const picked = b.parseBounties([{ weekOf: '2026-11-30', boss: 'Zuk', parts: ['Nex'], active: true, chosenBy: 'Donini' }], drops);
   assert.equal(b.planWeek(pool, picked, '2026-11-30', S).bounty.boss, 'Zuk');
-  assert.equal(b.planWeek(pool, [], '2026-12-07', S).bounty.boss !== undefined, true);
+  // Extra /bhpost on Wed 11-25: random, never the pick, never the forced row; its id = that day.
+  const extra = b.planWeek(pool, picked, '2026-11-25', S, Math.random, { extra: true });
+  assert.equal(extra.source, 'extra');
+  assert.equal(extra.bounty.boss, 'Vorago'); // Zuk is waiting as a pick → excluded too
+  assert.equal(extra.bounty.weekOf, '2026-11-25');
+});
+
+test('cooldown counts the day a bounty really went up', () => {
+  const pool = poolOf(['Araxxor', 'Vorago']);
+  const h = b.parseBounties([hist('2026-11-23', 'Araxxor', { postedAt: Date.parse('2026-11-15T19:27:00Z') })], drops);
+  assert.deepEqual(b.eligiblePool(pool, h, '2026-11-23', S).map(p => p.boss), ['Vorago']);
+  assert.equal(b.waitingPick(h), null);
 });
 
 test('cooldown is per boss: a boss used in the last 8 weeks is skipped, even as another task', () => {
