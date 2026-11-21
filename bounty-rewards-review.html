@@ -81,6 +81,15 @@ svg text{font-family:var(--f-body)}
 .pts::after{content:attr(data-tip);position:absolute;left:50%;bottom:calc(100% + 6px);transform:translateX(-50%);background:var(--ink);color:var(--bg);font-size:.78rem;padding:5px 9px;border-radius:6px;white-space:normal;width:max-content;max-width:260px;text-align:left;line-height:1.4;font-family:var(--f-body);opacity:0;pointer-events:none;z-index:4}
 .pts:hover::after,.pts:focus-visible::after{opacity:1}
 .pts:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.decide{display:flex;flex-direction:column;gap:10px}
+.dq{display:grid;grid-template-columns:auto 1fr;gap:12px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+.dq>div{min-width:0;display:flex;flex-direction:column;gap:6px}
+.dq p{font-size:.9rem;color:var(--ink-2)}
+.dq .ask{font-size:.88rem;color:var(--ink);border-left:3px solid var(--accent);padding-left:9px}
+.qn{font-family:var(--f-mono);font-weight:600;color:var(--accent);font-size:.95rem;padding-top:1px}
+.done{background:var(--good-soft);border-radius:10px;padding:14px 16px}
+.done h3{color:var(--good)}
+.done ul{margin:6px 0 0;padding-left:18px;font-size:.9rem;display:flex;flex-direction:column;gap:4px}
 details{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 16px}
 summary{cursor:pointer;font-weight:600}
 details ul{color:var(--ink-2);font-size:.9rem}
@@ -89,15 +98,45 @@ details ul{color:var(--ink-2);font-size:.9rem}
 
 <div class="wrap">
 <header>
-  <span class="eyebrow">Myriad · Bounty Hunter · proposal for the admins and the sponsor · 21 Nov 2026</span>
+  <span class="eyebrow">Myriad · Bounty Hunter · proposal for the admin team · 21 Nov 2026</span>
   <h1>Bounty rewards review</h1>
-  <p class="lede">Our old bounties paid 100M, 150M, sometimes 200M to the winner. The new points system spreads the rewards thinner. It is fairer, but nobody ever feels "omg, I want to win this". This page shows what the current setup really pays out, then gives five options with their costs, so we can pick a budget and a feel together.</p>
+  <p class="lede">Our old bounties paid 100M, 150M, sometimes 200M to the winner. The points system spreads rewards thinner: fairer, but nobody feels "omg, I want to win this". Since 21 Nov every bounty pays by how hard it really is. This page shows what that costs and proposes big GP prizes on top, so the excitement comes back. The decisions we need from you come first.</p>
   <p class="sub">All numbers assume <b>10 active players</b> (change it in the bar below). Points are valued at 500k GP each, the rate our shop uses. Drop chances and kills per hour come from the RS3 wiki (read 21 Nov 2026), counted <b>per kill</b>, including every drop pile a kill gives. The difficulty table shows which game mode and enrage each number is for.</p>
 </header>
 
 <section>
   <div class="findings" id="findings"></div>
 </section>
+
+<section id="decide">
+  <span class="eyebrow">For the admin meeting</span>
+  <h2>What we need you to decide</h2>
+  <p class="sub">The numbers in the boxes match the bar further down, which uses 10 active players at 4 hours each a week. Change the bar and every number on the page updates.</p>
+  <div class="decide">
+    <div class="dq"><span class="qn">Q1</span><div><h3>How much can we spend per month?</h3><p>The sponsor and the clan bank set the ceiling. For comparison: the points now in the sheet pay out at most <b class="num" data-cost="B">–</b> a month. The full package is <b class="num" data-cost="R">–</b>, and the old bounties were about <b class="num" id="oldMonthly">–</b>.</p><p class="ask">Proposal: agree a monthly ceiling first. Everything else scales with it.</p></div></div>
+    <div class="dq"><span class="qn">Q2</span><div><h3>Do we add big GP prizes on top of the points?</h3><p><b>Grand Bounty</b>: the first player to finish an Elite bounty wins a GP prize, which grows when nobody wins it. <b>Monthly draw</b>: one big prize every month, with tickets for every claim. Both need new bot features, which are not built yet.</p><p class="ask">Proposal: both. The points keep the weekly rhythm; these two bring back the "omg, I want this" moments.</p></div></div>
+    <div class="dq"><span class="qn">Q3</span><div><h3>How big are those prizes?</h3><p>Grand Bounty <b>150M</b>, +50M for every Elite week nobody wins, up to 300M. Monthly draw <b>100M</b>. Together that is about <b class="num" data-big="R">–</b> prizes of 100M+ a year.</p><p class="ask">Proposal: start with these and review after 3 months.</p></div></div>
+    <div class="dq"><span class="qn">Q4</span><div><h3>×2 or ×1.5 after 72 hours?</h3><p>When nobody claims a bounty within 3 days, the first claim is multiplied. With 9 Elite bounties this happens often, so ×2 quietly doubles the price of the hardest bounties.</p><p class="ask">Proposal: ×1.5 (Settings → <code>Multiplier</code> = <code>1,5</code>).</p></div></div>
+    <div class="dq"><span class="qn">Q5</span><div><h3>Fix the bounties that are close to impossible?</h3><p>Legiones grips are 1 in 2,056 and only drop on a Slayer task. Telos, Ghrazi and Zamorak change a lot with enrage. The Profane Scabarite lens needs a Slayer task.</p><p class="ask">Proposal: replace Legiones grips with "any Ascension signet". Write the enrage or Slayer task into the Notes of the others.</p></div></div>
+    <div class="dq"><span class="qn">Q6</span><div><h3>Who checks the boss numbers?</h3><p>Kills per hour for Telos, Ghrazi, Arch Glacor, Profane Scabarite and Legiones are still our guesses. The Difficulty tab in the sheet holds every number behind the tiers.</p><p class="ask">Proposal: whoever farms a boss checks its row. After a change, run <code>applyDifficultyToBounties</code> and the points update.</p></div></div>
+    <div class="dq"><span class="qn">Q7</span><div><h3>Shop and wheel clean-up</h3><p>Two 115-point items say "Dye of choice", but a Third Age or Blood dye is worth billions. The wheel's points prizes only hand points back.</p><p class="ask">Proposal: rename them to "ordinary dye", and consider the GP-only wheel in the Shop section.</p></div></div>
+  </div>
+  <div class="done">
+    <h3>Already done (21 Nov)</h3>
+    <ul>
+      <li>Every bounty has a tier from its real drop rate and the boss's difficulty, and the Bounties tab pays by tier: Easy <span class="pts" tabindex="0" data-tip="8 points first winner, 3 points each later winner">8/3</span> · Medium <span class="pts" tabindex="0" data-tip="20 points first winner, 8 points each later winner">20/8</span> · Hard <span class="pts" tabindex="0" data-tip="45 points first winner, 18 points each later winner">45/18</span> · Elite <span class="pts" tabindex="0" data-tip="100 points first winner, 40 points each later winner">100/40</span>.</li>
+      <li>New <b>Difficulty</b> tab in the sheet with every number behind the tiers. The bot does not read it.</li>
+      <li>Vorago no longer counts Tectonic energy, which drops almost every kill. Arch Glacor asks for Scripture of Wen instead of the common Manuscript.</li>
+      <li>The wheel's 50M prize no longer has the wrong description.</li>
+    </ul>
+    <h3 style="margin-top:10px">Already decided</h3>
+    <ul>
+      <li><b>Mid-level players get a fair shot.</b> Players who can only do Low or Mid bosses can earn from just 9 of the 20 bounties, so in more than half the weeks they have nothing to win. If we add the monthly draw, every claim gives <b>1 ticket, whatever the tier</b>, so an Easy claim counts as much as an Elite one. A mid player's chance of winning a 100M draw in a year goes from about 48% to about 62%.</li>
+      <li><b>More mid-level bounties.</b> The admins will add more bounties for Low and Mid bosses, so mid-level players have something to do in more weeks.</li>
+    </ul>
+  </div>
+</section>
+
 
 <div class="controls" role="group" aria-label="Assumptions">
   <label class="ctl" for="cPlayers">Active players<input id="cPlayers" type="number" min="2" max="40" value="10"></label>
@@ -112,7 +151,7 @@ details ul{color:var(--ink-2);font-size:.9rem}
 <section id="options">
   <span class="eyebrow">The options</span>
   <h2>Five ways to set it up</h2>
-  <p class="sub">A and B only change numbers in the sheet. C and D add a big GP prize on top of the points. Our recommendation is B + C + D together.</p>
+  <p class="sub">B is what the sheet uses now. A is a cheaper alternative. C and D add a big GP prize on top of B. Our proposal is B + C + D together.</p>
   <p class="sub"><b>How to read "5/2":</b> the first number is the points for the <b>first player</b> to finish the bounty. The second is the points for <b>each player who finishes after that</b>. Everyone can claim once. These are the sheet's First Points and Later Points columns. Example: on an Easy bounty the first finisher gets 5 points and every later finisher gets 2.</p>
   <div class="options" id="optCards"></div>
 </section>
@@ -166,19 +205,13 @@ details ul{color:var(--ink-2);font-size:.9rem}
 </section>
 
 <section>
-  <span class="eyebrow">For us to review</span>
-  <h2>Points we propose to review</h2>
+  <span class="eyebrow">Background</span>
+  <h2>Why we propose this</h2>
   <div class="review">
-    <div class="rv"><h3>1 · Three bounties were easier than they looked</h3><p><b>Vorago</b> included Tectonic energy, which drops almost every kill. <b>Arch-Glacor</b> asked for "Manuscript of Wen", a common extra drop. <b>Queen Black Dragon:</b> all 4 royal crossbow pieces take about 26 kills, roughly an hour.</p><p class="ask">Done: Tectonic energy is removed and Arch-Glacor now asks for Scripture of Wen. QBD stays as it is, as an Easy bounty.</p></div>
-    <div class="rv"><h3>2 · Some are close to impossible in one week</h3><p><b>Legiones:</b> Ascension grips are 1 in 2,056 Legio kills and only drop on a Slayer task. <b>Telos</b> at 100% enrage: about 1 in 1,100 for any dormant weapon. <b>Ghrazi</b> in normal mode: codex 1 in 3,000. <b>Profane Scabarite:</b> lens 1 in 4,096 off task (1 in 512 on task).</p><p class="ask">Replace Legiones grips (e.g. "any Ascension signet", about 1 in 49). For the others, state the enrage or Slayer task in the bounty and pay Elite.</p></div>
-    <div class="rv"><h3>3 · Write the mode, enrage and team size into the bounty</h3><p>The same item has very different odds. Zuk and Vorago drop twice as often in hard mode. Zamorak's codex goes from 1 in 606 (under 20% enrage) to 1 in 78 (2,000%). The Ambassador crossbow roll is 1 in 55 solo but 1 in 166 in a trio. Croesus depends on your contribution.</p><p class="ask">Add a line to Notes, e.g. "any mode" or "hard mode only", "solo or group". Our tiers assume the mode named in the table.</p></div>
-    <div class="rv"><h3>4 · Done: pay now follows the work</h3><p>Before, QBD (about 1 hour) and Zamorak's Chaos Roar codex (about 28 hours at 100% enrage) both paid <span class="pts" tabindex="0" data-tip="10 points first winner, 5 points each later winner">10/5</span>. Now QBD pays <span class="pts" tabindex="0" data-tip="8 points first winner, 3 points each later winner">8/3</span> and Zamorak <span class="pts" tabindex="0" data-tip="100 points first winner, 40 points each later winner">100/40</span>. Nine of our 20 bounties are Elite.</p><p class="ask">Still open: the Settings <code>Multiplier</code> is ×2. Option B assumes ×1.5. The Elite bounties are the natural home for the Grand Bounty prize.</p></div>
-    <div class="rv"><h3>5 · The ×2 after 72 hours mostly hits hard bounties</h3><p>On Hard and Elite bounties nobody claims in the first 3 days quite often, so the ×2 becomes a hidden price doubling.</p><p class="ask">Lower it to ×1.5 (Settings → <code>Multiplier</code> = <code>1,5</code>), or keep ×2 and price it in.</p></div>
-    <div class="rv"><h3>6 · Can players afford the shop?</h3><p>The shop table shows how many weeks of play each item costs under each option. If the 100M item takes most of a year, it is a goal for very few players.</p><p class="ask">Raise the points (option B), or accept that the shop is for small items and the big moments come from C and D.</p></div>
-    <div class="rv"><h3>7 · Wheel prizes and descriptions</h3><p>The 4% prize "50M" still has the description "Your own colour and name". Points prizes (+5, +20) only hand points back, which makes the odds harder to read.</p><p class="ask">Fix the description. Consider the GP-only wheel shown above.</p></div>
-    <div class="rv"><h3>8 · "Dye of choice" items</h3><p>Two 115-point items say "Dye of choice". A Third Age or Blood dye is worth billions, not 57M.</p><p class="ask">Rename them to "ordinary dye" or list the allowed dyes.</p></div>
-    <div class="rv"><h3>9 · Unspent points are money we owe</h3><p>Every point in a wallet is a promise of 500k. If many players save up, a large bill can arrive at once.</p><p class="ask">Keep Stock limits on the GP items (the 100M already has 3) and check the total of all wallets once a month.</p></div>
-    <div class="rv"><h3>10 · Agree the budget first</h3><p>The old bounties cost about <b class="num" id="oldMonthly">–</b> a month (set the old prize and frequency above). Everything here scales with one number: what the sponsor and the clan bank can put in each month.</p><p class="ask">Agree a monthly ceiling, then pick the option that fits under it.</p></div>
+    <div class="rv"><h3>Write the mode, enrage and team size into each bounty</h3><p>The same item has very different odds. Zuk and Vorago drop twice as often in hard mode. Zamorak's codex goes from 1 in 606 (under 20% enrage) to 1 in 78 (2,000%). The Ambassador crossbow roll is 1 in 55 solo but 1 in 166 in a trio. Croesus depends on your contribution.</p><p class="ask">Add a line to Notes, e.g. "any mode" or "hard mode only", "solo or group". Our tiers assume the mode named in the table.</p></div>
+    <div class="rv"><h3>The ×2 mostly hits hard bounties</h3><p>On Hard and Elite bounties nobody claims in the first 3 days quite often, so the ×2 becomes a hidden price doubling (see Q4).</p></div>
+    <div class="rv"><h3>Points alone don't create big moments</h3><p>Even with the new points, the 100M shop item takes an active player months of play (see the shop table). The shop works well for steady small rewards. A single 100M+ win needs the Grand Bounty or the draw (see Q2).</p></div>
+    <div class="rv"><h3>Unspent points are money we owe</h3><p>Every point in a wallet is a promise of 500k. If many players save up, a large bill can arrive at once.</p><p class="ask">Keep Stock limits on the GP items (the 100M already has 3) and check the total of all wallets once a month.</p></div>
   </div>
 </section>
 
@@ -190,7 +223,7 @@ details ul{color:var(--ink-2);font-size:.9rem}
     <li>Drop chances are per kill and include every drop pile (Kerapac 3, Arch-Glacor normal mode 3, Vorago 5 piles shared by the team). When several parts are all needed, the average kills is the expected wait until you hold one of each.</li>
     <li>Finish times are spread over the week, so the first claim gets the multiplier when nobody finishes in the first 72 hours. Results come from a 20,000-week simulation in this page.</li>
     <li>"Before" uses the First/Later Points the sheet had until 21 Nov, with ×2 after 72h. Option B is what the sheet has now. Kills per hour and boss ratings come from the Difficulty tab (read 21 Nov 2026).</li>
-    <li>Grand Bounty: an Elite week nobody claims adds 50M to the next Elite prize, up to 300M. Monthly draw: a claim gives 1 / 2 / 4 / 8 tickets (Easy → Elite), and the first claim gets double. The cost is simply the prize. "Chance to win a big prize" assumes equal players.</li>
+    <li>Grand Bounty: an Elite week nobody claims adds 50M to the next Elite prize, up to 300M. Monthly draw: every claim gives 1 ticket, whatever the tier. The cost is simply the prize. "Chance to win a big prize" assumes equal players.</li>
     <li>Not counted: Pick next week's bounty, sponsors, duels, gifts and donations. They move points between players and cost the clan nothing.</li>
     <li>Sources: the boss pages and "Money making guide" pages on runescape.wiki, read 21 Nov 2026.</li>
   </ul>
@@ -240,7 +273,7 @@ const OPTS=[
  {id:"C",name:"C · Grand Bounty",tag:"CLOSEST TO THE OLD BOUNTIES",pts:RICH,mult:1.5,jack:true,draw:false,
   bullets:["B, plus the first player to finish an Elite bounty wins a GP prize","Not won? +50M on the next Elite, up to 300M","The pot grows on the board, so people see it coming"]},
  {id:"D",name:"D · Monthly Big Draw",tag:"EVERYONE HAS A SHOT",pts:RICH,mult:1.5,jack:false,draw:true,
-  bullets:["B, plus one big GP prize drawn every month","Every claim gives tickets: Easy 1 · Medium 2 · Hard 4 · Elite 8, first claim ×2","Casual players can win too; the cost is fixed in advance"]},
+  bullets:["B, plus one big GP prize drawn every month","Every claim gives 1 ticket, whatever the tier, so mid-level players have the same shot","Casual players can win too; the cost is fixed in advance"]},
  {id:"R",name:"B + C + D",tag:"RECOMMENDED",pts:RICH,mult:1.5,jack:true,draw:true,rec:true,
   bullets:["Rich tiers for the steady weekly rewards","Grand Bounty for the rare \"I did it\" moment","Monthly draw so everyone who plays has a chance"]},
 ];
@@ -273,6 +306,8 @@ function render(s,oldMo){
   const today=RES[0],rec=RES[5];
   const pts100=Math.round(100/s.gpp);
   $("oldMonthly").textContent=fmtM(oldMo);
+  document.querySelectorAll("[data-cost]").forEach(el=>{const o=RES.find(r=>r.id===el.dataset.cost);el.textContent=fmtM(o.total)});
+  document.querySelectorAll("[data-big]").forEach(el=>{const o=RES.find(r=>r.id===el.dataset.big);el.textContent=Math.round(o.big)});
   $("findings").innerHTML=[
     [fmtM(today.total)+" / month","What the old points paid out, at most. The old 100M+ bounties were about "+fmtM(oldMo)+" a month."],
     [today.perPlayer.toFixed(1)+" pts / week","What an average active player earned with the old points. The 100M item ("+pts100+" pts) takes about "+Math.round(pts100/today.perPlayer)+" weeks."],
