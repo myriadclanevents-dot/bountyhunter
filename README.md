@@ -43,6 +43,27 @@ all lines. Earned = all lines except shop purchases, wheel lines (type `wheel`),
 Fix mistakes with `/bhvoid` (undo an approval) and `/bhgive` (± points) — never
 by editing the grey tabs.
 
+### Big GP prizes (prizes.js)
+Both are paid **in game by an admin**: the bot announces the winner in the awards
+channel, posts a "trade it, then react ✅" note in the shop admin channel, and
+records the win as a **0-point Points row of type `gp prize`** (so it is never
+paid twice). All Settings rows are optional; amounts are in **millions of GP**.
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `Grand_Bounty_Prize` | 150 | GP for the first finisher of a Grand Bounty. `0` = off. |
+| `Grand_Bounty_Min_First_Points` | 100 | A bounty is a Grand Bounty when its First Points are at least this (100 = Elite). |
+| `Grand_Bounty_Rollover` | 50 | Added to the next Grand Bounty when one closes with nobody finishing it. |
+| `Grand_Bounty_Max` | 300 | The prize never grows past this. |
+| `Monthly_Draw_Prize` | 100 | GP drawn on the 1st of the month. Every claim in the month = 1 ticket, any tier. `0` = off. |
+| `Grand_Bounty_Since`, `Monthly_Draw_Since` | bot | Written on first start (ms). Older bounties/claims don't count. |
+
+The pot is worked out from History + Points, nothing else is stored: it resets
+to the base after a win (or any claim), and grows only once a Grand Bounty has
+**closed** unclaimed. The draw runs together with the monthly top-3 post.
+Voiding the winning claim does **not** undo the prize: delete its `gp prize`
+row by hand if the GP should not be paid (the next first claim then wins it).
+
 ## Setup
 
 1. **Sheet back end**: open the sheet → Extensions → Apps Script → replace the code

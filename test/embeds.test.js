@@ -101,8 +101,12 @@ test('help: explains the flow, admin commands only for admins', () => {
   const player = e.helpEmbed(s);
   const text = player.fields.map(f => f.value).join('\n');
   assert.match(text, /<#42>/);
-  assert.match(text, /\*\*20 pts\*\*/);
+  assert.match(text, /Harder bounties pay more/);
   assert.match(text, /\*\*48 hours\*\*.*×3/);
+  assert.match(text, /Grand Bounty.*150M GP.*50M more \(up to 300M\)/);
+  assert.match(text, /Monthly draw.*1 ticket.*100M GP/);
+  const off = e.helpEmbed(b.readSettings({ Grand_Bounty_Prize: 0, Monthly_Draw_Prize: '0' })).fields.map(f => f.value).join('\n');
+  assert.doesNotMatch(off, /Grand Bounty|Monthly draw/);
   assert.match(text, /\/bhbuy/);
   assert.doesNotMatch(text, /\/bhvoid/);
   assert.match(e.helpEmbed(s, { admin: true }).fields.map(f => f.value).join('\n'), /\/bhvoid/);

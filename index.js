@@ -19,6 +19,7 @@ const sheet = require('./sheet');
 const b = require('./bounty');
 const e = require('./embeds');
 const x = require('./extras');
+const pz = require('./prizes');
 const { MESSAGE_MAX, NOTE_MAX, donateModal, giftModal, sponsorModal, duelModal, wordModal, emojiModal } = require('./donations');
 const { parseSubmission, buildMatcher, findItem } = require('./matching');
 
@@ -166,7 +167,13 @@ function viewFor(bounty, at = now()) {
   const claims = b.activeClaims(points, bounty.weekOf);
   const inProgress = b.inProgressCount(bounty, b.activeSubmissions(sheet.getSubmissions()), claims);
   const closed = at >= b.closesAt(sheet.getBounties(), bounty, S());
-  return e.bountyView(bounty, { claims, inProgress, settings: S(), now: at, closed, pot: x.potOf(points, bounty.weekOf) });
+  return e.bountyView(bounty, { claims, inProgress, settings: S(), now: at, closed, pot: x.potOf(points, bounty.weekOf), grand: grandFor(bounty, at) });
+}
+
+/** Grand Bounty prize (M GP) for this bounty, or 0 when it doesn't carry one. */
+function grandFor(bounty, at = now()) {
+  const s = S();
+  return pz.qualifies(bounty, s) ? pz.grandPotFor(sheet.getBounties(), sheet.getPoints(), bounty, s, at) : 0;
 }
 
 const lastRendered = new Map();
@@ -286,7 +293,8 @@ async function postBounty(bounty, source = '') {
     draft.codeWord = x.boughtCodeWord(boughtWord, s.nextCodeWordWeek, CODE_SALT);
     bounty.codeWord = draft.codeWord;
   }
-  const view = e.bountyView(draft, { claims: [], inProgress: 0, settings: s, now: postedAt, closed: false });
+  const grand = grandFor(draft, postedAt);
+  const view = e.bountyView(draft, { claims: [], inProgress: 0, settings: s, now: postedAt, closed: false, grand });
   const msg = await channel.send({ embeds: [e.boardEmbed(draft, view, s, links())] });
   await msg.pin().catch(err => console.error(`⚠️ Could not pin the bounty (needs Pin Messages permission): ${err.message}`));
   await sheet.markPosted(bounty, postedAt, msg.id, draft.codeWord);
@@ -299,7 +307,7 @@ async function postBounty(bounty, source = '') {
   }
   if (s.awardsChannelId && s.awardsChannelId !== s.boardChannelId) {
     const awards = await fetchChannel(s.awardsChannelId);
-    await awards?.send({ embeds: [e.newBountyEmbed(draft, msg.url, s, links())] }).catch(() => {});
+    await awards?.send({ embeds: [e.newBountyEmbed(draft, msg.url, s, links(), grand)] }).catch(() => {});
   }
   await refreshBoards();
   return { ok: true, url: msg.url };
@@ -406,7 +414,71 @@ async function awardClaim(bounty, { player, playerId, completedAt, approver, mes
   const awards = await fetchChannel(s.awardsChannelId);
   await awards?.send({ embeds: [e.claimEmbed({ player, points, isFirst, multiplied, bounty, settings: s, claimNumber, balance, rank })] })
     .catch(err => console.error(`⚠️ Could not post in awards: ${err.message}`));
+  if (isFirst) await awardGrand(bounty, { player, playerId });
   await settleExtras();
+}
+
+/** First finisher of a Grand Bounty: record the GP win once, announce it, ping the admins. */
+async function awardGrand(bounty, { player, playerId }) {
+  const s = S();
+  if (!pz.qualifies(bounty, s)) return;
+  const ref = pz.grandRef(bounty.weekOf);
+  if (pz.prizeRow(sheet.getPoints(), ref)) return; // already won
+  const amount = pz.grandPotFor(sheet.getBounties(), sheet.getPoints(), bounty, s, now());
+  await sheet.addPoints({
+    opId: ref, time: now(), player, playerId, change: 0, type: pz.TYPE_PRIZE,
+    detail: `Grand Bounty ${bounty.boss}: ${amount}M GP`, by: 'bot', weekOf: bounty.weekOf, ref
+  });
+  console.log(`🏆 Grand Bounty ${bounty.weekOf} (${bounty.boss}) won by ${player}: ${amount}M GP`);
+  const awards = await fetchChannel(s.awardsChannelId);
+  await awards?.send({ embeds: [e.grandWinEmbed({ player, playerId, amount, bounty })], allowedMentions: { users: [playerId] } })
+    .catch(err => console.error(`⚠️ Could not announce the Grand Bounty: ${err.message}`));
+  await prizeAdminPing({ what: `Grand Bounty, ${bounty.boss}`, player, playerId, amount });
+}
+
+async function prizeAdminPing({ what, player, playerId, amount }) {
+  const admin = await fetchChannel(S().shopAdminChannelId);
+  const ping = await admin?.send({ embeds: [e.prizeAdminEmbed({ what, player, playerId, amount })], allowedMentions: NO_PINGS }).catch(() => null);
+  if (ping) await ping.react(DELIVERED).catch(() => {});
+  else console.error(`⚠️ ${player} won ${amount}M GP (${what}), but the admin ping could not be posted (check Shop_Admin_Channel_ID).`);
+}
+
+/** The monthly draw for the month that just ended. True when done (or nothing to do). */
+async function runDraw(prevMs, prevKey) {
+  const s = S();
+  if (!(s.drawPrize > 0) || !s.drawSince) return true;
+  const ref = pz.drawRef(prevKey);
+  if (pz.prizeRow(sheet.getPoints(), ref)) return true;
+  const entries = pz.drawTickets(sheet.getPoints(), b.monthRange(prevMs), s.drawSince);
+  const winner = pz.drawWinner(entries, fairRandom());
+  if (!winner) return true; // no claims that month: nothing to draw
+  const amount = s.drawPrize;
+  const res = await sheet.addPoints({
+    opId: ref, time: now(), player: winner.player, playerId: winner.playerId, change: 0, type: pz.TYPE_PRIZE,
+    detail: `Monthly draw ${prevKey}: ${amount}M GP (${winner.tickets} of ${entries.reduce((n, x2) => n + x2.tickets, 0)} tickets)`, by: 'bot', ref
+  });
+  // Kept in memory even if the sheet write failed (it was retried), so the draw is never run twice.
+  if (res && res.ok === false) console.error(`❌ Monthly draw ${prevKey}: could not save the winner to the sheet. Add it by hand: ${winner.player}, ${amount}M GP.`);
+  const monthName = new Date(prevMs).toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+  console.log(`🎟️ Monthly draw ${prevKey}: ${winner.player} wins ${amount}M GP`);
+  const awards = await fetchChannel(s.awardsChannelId);
+  await awards?.send({ embeds: [e.drawEmbed({ monthName, winner, amount, entries })], allowedMentions: { users: [winner.playerId] } })
+    .catch(err => console.error(`⚠️ Could not announce the monthly draw: ${err.message}`));
+  await prizeAdminPing({ what: `monthly draw, ${monthName}`, player: winner.player, playerId: winner.playerId, amount });
+  return true;
+}
+
+/** First start with a prize switched on: remember when it began, so older bounties/claims don't count. */
+async function startPrizes(t) {
+  const s = S();
+  if (s.grandPrize > 0 && !s.grandSince) {
+    await sheet.setSetting('Grand_Bounty_Since', String(t));
+    console.log('🏆 Grand Bounty switched on: bounties posted from now on can carry it.');
+  }
+  if (s.drawPrize > 0 && !s.drawSince) {
+    await sheet.setSetting('Monthly_Draw_Since', String(t));
+    console.log('🎟️ Monthly draw switched on: claims from now on are tickets.');
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1299,6 +1371,7 @@ async function checkMonthly(t) {
     await sheet.setSetting('Last_Monthly_Post', prevKey);
     return;
   }
+  if (!(await runDraw(prevMs, prevKey))) return;
   const rows = b.standings(sheet.getPoints(), b.monthRange(prevMs));
   if (rows.length) {
     const monthName = new Date(prevMs).toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' });
@@ -1316,6 +1389,7 @@ async function tick() {
   try {
     if (!sheet.isAvailable() && !(await sheet.loadAll())) return;
     const t = now();
+    await startPrizes(t);
     const s = S();
     // Old Apps Script (no History tab) = never post: the bot can't tell what already went up.
     const due = sheet.hasHistory() ? b.dueWeek(sheet.getBounties(), t, s) : null;

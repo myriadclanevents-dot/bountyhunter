@@ -23,7 +23,8 @@ const TYPE_SPONSOR = 'sponsor'; // stake on a bounty pot (−) and pot won/refun
 const TYPE_DUEL = 'duel'; // duel stake (−) and pot won/refunded (+): wallet only
 
 // Types that move the wallet but never count as "earned".
-const WALLET_ONLY = new Set([TYPE_SHOP, TYPE_WHEEL, TYPE_DONATION, TYPE_GIFT, TYPE_SPONSOR, TYPE_DUEL]);
+const TYPE_PRIZE = 'gp prize'; // 0-point record of a Grand Bounty / monthly draw GP win (see prizes.js)
+const WALLET_ONLY = new Set([TYPE_SHOP, TYPE_WHEEL, TYPE_DONATION, TYPE_GIFT, TYPE_SPONSOR, TYPE_DUEL, TYPE_PRIZE]);
 const walletOnly = p => WALLET_ONLY.has(String(p.type ?? '').trim().toLowerCase());
 
 // ---------------------------------------------------------------------------
@@ -74,7 +75,16 @@ function readSettings(raw = {}) {
     // Written by the bot: where the clan goal's count starts, and a bought code word.
     goalBase: num(raw.Clan_Goal_Base, null),
     nextCodeWord: str(raw.Next_Code_Word),
-    nextCodeWordWeek: str(raw.Next_Code_Word_Week)
+    nextCodeWordWeek: str(raw.Next_Code_Word_Week),
+    // Grand Bounty (M GP, paid in game): bounties with First Points >= grandMinFirst. 0 = off.
+    grandPrize: Math.max(0, num(raw.Grand_Bounty_Prize, 150)),
+    grandRollover: Math.max(0, num(raw.Grand_Bounty_Rollover, 50)),
+    grandMax: Math.max(0, num(raw.Grand_Bounty_Max, 300)),
+    grandMinFirst: Math.max(1, num(raw.Grand_Bounty_Min_First_Points, 100)),
+    grandSince: num(raw.Grand_Bounty_Since, null), // written by the bot on first start
+    // Monthly draw (M GP, paid in game): 1 ticket per claim. 0 = off.
+    drawPrize: Math.max(0, num(raw.Monthly_Draw_Prize, 100)),
+    drawSince: num(raw.Monthly_Draw_Since, null) // written by the bot on first start
   };
 }
 

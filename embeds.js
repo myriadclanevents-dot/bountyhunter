@@ -41,14 +41,14 @@ function partFields(bounty) {
  * State of a bounty for the pinned post and /bhbounty.
  * `claims` are active claim rows for this week (oldest first).
  */
-function bountyView(bounty, { claims, inProgress, settings, now, closed, pot = 0 }) {
+function bountyView(bounty, { claims, inProgress, settings, now, closed, pot = 0, grand = 0 }) {
   const first = claims.find(c => String(c.type).toLowerCase() === b.TYPE_FIRST) || null;
   const multStart = b.multiplierStartsAt(bounty, settings);
   const multOn = b.multiplierActive(bounty, settings, claims.length, now);
   const firstBase = bounty.firstPoints ?? settings.defaultFirst;
   const later = bounty.laterPoints ?? settings.defaultLater;
   const firstNow = multOn ? Math.round(firstBase * settings.multiplier) : firstBase;
-  return { first, multStart, multOn, firstBase, firstNow, later, claims, inProgress, closed, pot };
+  return { first, multStart, multOn, firstBase, firstNow, later, claims, inProgress, closed, pot, grand };
 }
 
 /** The pinned weekly bounty post. */
@@ -97,6 +97,15 @@ function boardEmbed(bounty, view, settings, links = {}) {
   fields.push({ name: 'Later claims', value: `${view.later} pts each`, inline: true });
   if (view.pot > 0) {
     fields.push({ name: '💰 Sponsor pot', value: view.first ? `**${view.pot} pts** went to ${view.first.player}` : view.closed ? `**${view.pot} pts** refunded` : `**${view.pot} pts** extra for the first claim`, inline: true });
+  }
+  if (view.grand > 0) {
+    fields.push({
+      name: '🏆 Grand Bounty',
+      value: view.first ? `**${view.grand}M GP** won by ${view.first.player}`
+        : view.closed ? 'Not won. The next Grand Bounty pays more!'
+          : `**${view.grand}M GP** for the first player to finish`,
+      inline: true
+    });
   }
   if (!view.first && !view.closed && view.multStart && !view.multOn) {
     fields.push({ name: `×${settings.multiplier} multiplier`, value: `${ts(view.multStart)} if still unclaimed`, inline: true });
@@ -177,11 +186,12 @@ function multiplierEmbed(bounty, settings, firstNow, links = {}) {
   };
 }
 
-function newBountyEmbed(bounty, boardUrl, settings = {}, links = {}) {
+function newBountyEmbed(bounty, boardUrl, settings = {}, links = {}, grand = 0) {
   return {
     color: GOLD,
-    title: `🎯 New bounty: ${bounty.boss}`,
+    title: grand > 0 ? `🏆 GRAND BOUNTY: ${bounty.boss} · ${grand}M GP` : `🎯 New bounty: ${bounty.boss}`,
     description: `This week's bounty is up${boardUrl ? `: ${boardUrl}` : ` in ${chan(settings.boardChannelId, 'the bounty board')}`}.` +
+      (grand > 0 ? `\n🏆 The **first player to finish** wins **${grand}M GP** on top of the points!` : '') +
       (bounty.chosenById ? `\n🎯 Chosen by <@${bounty.chosenById}>, who bought "Pick next week's bounty" in the shop.` : '') +
       (bounty.codeWord ? `\n🔑 Code word: **${bounty.codeWord}**. Have it visible in your screenshots.` : '') +
       `\n📸 Post your screenshots in ${chan(settings.submissionsChannelId, 'the submissions channel')} with the item name in the message.` +
@@ -437,9 +447,13 @@ function helpEmbed(settings, { admin = false, pinned = false } = {}) {
     `**6.** All parts done = bounty claimed! Claims are announced in ${awards}.`
   ];
   const points = [
-    `🥇 **First** player to finish: **${settings.defaultFirst} pts**. Everyone after: **${settings.defaultLater} pts** (some bounties pay more, see the pinned post).`,
+    '🥇 The **first** player to finish gets the most points, everyone after gets fewer. Harder bounties pay more: the pinned post shows this week\'s points.',
     ...(settings.multiplier > 1
       ? [`🔥 Nobody finished after **${settings.multiplierAfterHours} hours**? The first claim becomes **×${settings.multiplier}**.`] : []),
+    ...(settings.grandPrize > 0
+      ? [`🏆 **Grand Bounty**: the hardest bounties also pay the first finisher **${settings.grandPrize}M GP**. Not won? The next one pays ${settings.grandRollover}M more (up to ${Math.max(settings.grandMax, settings.grandPrize)}M).`] : []),
+    ...(settings.drawPrize > 0
+      ? [`🎟️ **Monthly draw**: every claim is 1 ticket, whatever the bounty. On the 1st of the month one ticket wins **${settings.drawPrize}M GP**.`] : []),
     'You can claim each bounty **once**. You have until the next bounty is posted.',
     '💰 **Wallet** = points you can spend in the shop. **Earned** = all points you ever got (the leaderboard uses this, so spending never hurts your rank).'
   ];
@@ -483,7 +497,41 @@ function helpEmbed(settings, { admin = false, pinned = false } = {}) {
   };
 }
 
+/** Awards channel: someone won the Grand Bounty. */
+function grandWinEmbed({ player, playerId, amount, bounty }) {
+  return {
+    color: GOLD,
+    title: `🏆 GRAND BOUNTY WON! ${player} wins ${amount}M GP`,
+    description: `<@${playerId}> was the first to finish the **${bounty.boss}** bounty and wins **${amount}M GP** on top of the points. ` +
+      'An admin will trade it to you in game.'
+  };
+}
+
+/** Awards channel: the monthly draw result. */
+function drawEmbed({ monthName, winner, amount, entries }) {
+  const total = entries.reduce((n, x2) => n + x2.tickets, 0);
+  const list = entries.slice(0, 15).map(x2 => `${x2.player} · ${plural(x2.tickets, 'ticket')}`);
+  if (entries.length > 15) list.push(`…and ${entries.length - 15} more`);
+  return {
+    color: GOLD,
+    title: `🎟️ Monthly draw for ${monthName}: ${winner.player} wins ${amount}M GP!`,
+    description: `Congratulations <@${winner.playerId}>! An admin will trade the **${amount}M GP** to you in game.\n\n` +
+      `Every bounty claim was 1 ticket, whatever the tier. ${plural(total, 'ticket')} from ${plural(entries.length, 'player')}:\n` +
+      clip(list.join('\n'), 3500) + '\n\nA new draw starts now: every claim this month is a ticket.'
+  };
+}
+
+/** Shop admin channel: GP to pay in game for a Grand Bounty or draw win. */
+function prizeAdminEmbed({ what, player, playerId, amount }) {
+  return {
+    color: RED,
+    description: `🏆 **${player}** (<@${playerId}>) won **${amount}M GP** (${what}).\nTrade it in game, then react ✅.`,
+    footer: { text: 'Recorded in the Points tab as type "gp prize"' }
+  };
+}
+
 module.exports = {
+  grandWinEmbed, drawEmbed, prizeAdminEmbed,
   ts, weekLabel, shownWeek, bountyView, boardEmbed, progressEmbed, claimEmbed, multiplierEmbed, newBountyEmbed,
   table, leaderboardEmbed, monthlyWinnersEmbed, meEmbed, shopEmbed, confirmBuyEmbed, confirmPickEmbed, pickAdminEmbed, adminPurchaseEmbed, pastEmbed,
   wheelOddsText, spinFrameEmbed, adminLogEmbed, helpEmbed, GUIDE_TITLE,

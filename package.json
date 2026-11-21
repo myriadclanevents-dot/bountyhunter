@@ -6,7 +6,7 @@
   "private": true,
   "scripts": {
     "start": "node index.js",
-    "test": "node test/bounty.test.js && node test/embeds.test.js"
+    "test": "node test/bounty.test.js && node test/embeds.test.js && node test/prizes.test.js"
   },
   "license": "ISC",
   "type": "commonjs",
