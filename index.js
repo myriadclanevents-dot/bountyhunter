@@ -11,12 +11,15 @@ require('dotenv').config();
 
 const {
   Client, GatewayIntentBits, Partials, Events, REST, Routes, SlashCommandBuilder,
-  MessageFlags, PermissionFlagsBits, ActionRowBuilder, StringSelectMenuBuilder, ButtonBuilder, ButtonStyle
+  MessageFlags, PermissionFlagsBits, ActionRowBuilder, StringSelectMenuBuilder, UserSelectMenuBuilder,
+  ButtonBuilder, ButtonStyle, escapeMarkdown
 } = require('discord.js');
 
 const sheet = require('./sheet');
 const b = require('./bounty');
 const e = require('./embeds');
+const x = require('./extras');
+const { MESSAGE_MAX, NOTE_MAX, donateModal, giftModal, sponsorModal, duelModal, wordModal, emojiModal } = require('./donations');
 const { parseSubmission, buildMatcher, findItem } = require('./matching');
 
 const TOKEN = process.env.DISCORD_TOKEN;
@@ -163,7 +166,7 @@ function viewFor(bounty, at = now()) {
   const claims = b.activeClaims(points, bounty.weekOf);
   const inProgress = b.inProgressCount(bounty, b.activeSubmissions(sheet.getSubmissions()), claims);
   const closed = at >= b.closesAt(sheet.getBounties(), bounty, S());
-  return e.bountyView(bounty, { claims, inProgress, settings: S(), now: at, closed });
+  return e.bountyView(bounty, { claims, inProgress, settings: S(), now: at, closed, pot: x.potOf(points, bounty.weekOf) });
 }
 
 const lastRendered = new Map();
@@ -277,10 +280,17 @@ async function postBounty(bounty, source = '') {
   const previous = b.currentBounty(sheet.getBounties());
   const postedAt = now();
   const draft = withCode({ ...bounty, postedAt });
+  // A code word a player bought for this week replaces the usual one.
+  const boughtWord = x.wordForPost(s, postedAt);
+  if (boughtWord) {
+    draft.codeWord = x.boughtCodeWord(boughtWord, s.nextCodeWordWeek, CODE_SALT);
+    bounty.codeWord = draft.codeWord;
+  }
   const view = e.bountyView(draft, { claims: [], inProgress: 0, settings: s, now: postedAt, closed: false });
   const msg = await channel.send({ embeds: [e.boardEmbed(draft, view, s, links())] });
   await msg.pin().catch(err => console.error(`⚠️ Could not pin the bounty (needs Pin Messages permission): ${err.message}`));
   await sheet.markPosted(bounty, postedAt, msg.id, draft.codeWord);
+  if (boughtWord) await sheet.setSetting('Next_Code_Word', '');
   console.log(`🎯 Posted bounty ${bounty.weekOf}: ${bounty.boss}${source ? ` (${source}${bounty.chosenBy ? ` by ${bounty.chosenBy}` : ''})` : ''}`);
 
   if (previous?.messageId) {
@@ -360,6 +370,8 @@ async function handleApproval(message, approverUser) {
   });
   await removeOwnReaction(message, QUESTION);
   await message.react(TARGET).catch(() => {});
+  const ownEmoji = x.activeEmoji(sheet.getPoints(), playerId, t);
+  if (ownEmoji) await message.react(ownEmoji).catch(err => console.error(`⚠️ Could not add ${player}'s emoji: ${err.message}`));
 
   const readAs = match.exact ? '' : ` (read as **${match.item.name}**)`;
   const progress = b.progressFor(bounty, b.activeSubmissions(sheet.getSubmissions()), playerId);
@@ -394,6 +406,7 @@ async function awardClaim(bounty, { player, playerId, completedAt, approver, mes
   const awards = await fetchChannel(s.awardsChannelId);
   await awards?.send({ embeds: [e.claimEmbed({ player, points, isFirst, multiplied, bounty, settings: s, claimNumber, balance, rank })] })
     .catch(err => console.error(`⚠️ Could not post in awards: ${err.message}`));
+  await settleExtras();
 }
 
 // ---------------------------------------------------------------------------
@@ -494,7 +507,7 @@ const handlers = {
     const month = b.standings(points, b.monthRange(t));
     const stats = all.find(r => r.playerId === user.id) || { claims: 0, firsts: 0 };
     const recent = b.uniquePoints(points).filter(p => String(p.playerId) === user.id).slice(-5).reverse()
-      .map(p => `${{ [b.TYPE_SHOP]: '🛒 ', [b.TYPE_WHEEL]: '🎡 ' }[String(p.type).toLowerCase()] || ''}${p.detail || p.type} · ${Number(p.change) > 0 ? '+' : ''}${p.change}`);
+      .map(p => `${{ [b.TYPE_SHOP]: '🛒 ', [b.TYPE_WHEEL]: '🎡 ', [b.TYPE_DONATION]: '💝 ', [b.TYPE_GIFT]: '🎁 ', [b.TYPE_SPONSOR]: '💰 ', [b.TYPE_DUEL]: '⚔️ ' }[String(p.type).toLowerCase()] || ''}${p.detail || p.type} · ${Number(p.change) > 0 ? '+' : ''}${p.change}`);
     const name = b.playerNames(points).get(user.id) || await displayName(i.guild, user);
     return i.reply(ephemeral({ embeds: [e.meEmbed({
       player: name, balance: b.balances(points, user.id, t),
@@ -526,21 +539,27 @@ const handlers = {
   async bhshop(i) {
     if (!(await needSheet(i))) return;
     const wallet = b.balances(sheet.getPoints(), i.user.id, now()).wallet;
-    return i.reply(ephemeral({ embeds: [e.shopEmbed(shopItems().filter(x => x.active), wallet)] }));
+    const goal = x.goalState(sheet.getShop(), sheet.getPoints(), S());
+    return i.reply(ephemeral({ embeds: [e.shopEmbed(forSale(), wallet, goal)] }));
   },
 
   async bhbuy(i) {
     if (!(await needSheet(i))) return;
-    const items = shopItems().filter(x => x.active).slice(0, 25);
+    const items = forSale();
     if (!items.length) return i.reply(ephemeral({ content: 'The shop is empty right now.' }));
     const wallet = b.balances(sheet.getPoints(), i.user.id, now()).wallet;
-    const menu = new StringSelectMenuBuilder().setCustomId('bh:buy').setPlaceholder('Pick an item')
-      .addOptions(items.map(it => ({
-        label: `${it.item} — ${it.cost} pts`.slice(0, 100),
-        value: it.item.slice(0, 100),
-        description: (b.inStock(it) ? it.description || ' ' : 'Sold out').slice(0, 100)
-      })));
-    return i.reply(ephemeral({ content: `Your wallet: **${wallet} pts**. What would you like?`, components: [new ActionRowBuilder().addComponents(menu)] }));
+    // Discord allows 25 items per menu and 5 menus per message.
+    const pages = [];
+    for (let n = 0; n < items.length && pages.length < 5; n += 25) pages.push(items.slice(n, n + 25));
+    const components = pages.map((page, n) => new ActionRowBuilder().addComponents(
+      new StringSelectMenuBuilder().setCustomId(`bh:menu:${n}`)
+        .setPlaceholder(pages.length > 1 ? `Pick an item (list ${n + 1} of ${pages.length})` : 'Pick an item')
+        .addOptions(page.map(it => ({
+          label: `${it.item} — ${e.priceText(it)}`.slice(0, 100),
+          value: it.item.slice(0, 100),
+          description: (b.inStock(it) ? it.description || ' ' : 'Sold out').slice(0, 100)
+        })))));
+    return i.reply(ephemeral({ content: `Your wallet: **${wallet} pts**. What would you like?`, components }));
   },
 
   async bhpast(i) {
@@ -629,6 +648,8 @@ async function voidSubmission(messageId, i, reason = '') {
     if (String(claim.type).toLowerCase() === b.TYPE_FIRST) extra += ' It was the FIRST claim: the bonus does not move to anyone else automatically (use /bhgive if needed).';
   }
 
+  await settleExtras(); // a voided claim can move a sponsor pot or duel win
+
   const link = /channels\/\d+\/(\d+)\/\d+/.exec(row.messageLink || '');
   if (link) {
     const ch = await fetchChannel(link[1]);
@@ -645,14 +666,20 @@ async function voidSubmission(messageId, i, reason = '') {
 
 const pendingBuys = new Map(); // userId -> item name
 const pendingPicks = new Map(); // userId -> { item, week, choices, choice, at }
+const pendingTransfers = new Map(); // userId -> { kind, item, toId, toName, amount, text, at }
 const PICK_TTL = 5 * 60 * 1000;
 const done = content => ({ content, embeds: [], components: [] });
 
 /** The shop, with "Pick next week's bounty" sold out (1 per week) once that week is picked. */
 function shopItems() {
   const taken = Boolean(b.waitingPick(sheet.getBounties()));
-  return sheet.getShop().map(it => (it.isPick ? { ...it, stock: taken ? 0 : 1 } : it));
+  const wordGone = x.wordTaken(S(), b.nextOpenWeek(sheet.getBounties(), now()));
+  return sheet.getShop().map(it => (it.isPick ? { ...it, stock: taken ? 0 : 1 }
+    : it.isCodeWord ? { ...it, stock: wordGone ? 0 : 1 } : it));
 }
+
+/** What players can see and buy (the clan goal row is settings, not an item). */
+const forSale = () => shopItems().filter(it => it.active && !it.isGoal);
 
 /** Step 1 of a pick: up to Pick_Options random bounties (not used in the last Repeat_Cooldown_Weeks weeks). */
 async function showPickMenu(i, item) {
@@ -691,8 +718,338 @@ async function announcePick({ player, playerId, item, week, bounty, cost }) {
   console.log(`🎯 ${player} picked ${bounty.boss} for the week of ${week}.`);
 }
 
+const giftLeftFor = userId => Math.max(0, S().giftWeeklyLimit - b.giftedThisWeek(sheet.getPoints(), userId, now()));
+
+/** The waiting donation/gift of this user, or null if it expired or left the shop. */
+function liveTransfer(userId) {
+  const p = pendingTransfers.get(userId);
+  if (!p) return null;
+  const item = shopItems().find(x => x.item === p.item && x.active);
+  if (now() - p.at > PICK_TTL || !item) { pendingTransfers.delete(userId); return null; }
+  return { p, item };
+}
+
+const EXPIRED_TRANSFER = 'That expired. Run /bhbuy again. Nothing was spent.';
+
+/** The form was sent: check it, then ask for confirmation. Nothing is paid yet. */
+async function handleModal(i) {
+  if (EXTRA_MODALS.has(i.customId)) return handleExtraModal(i);
+  if (i.customId !== 'bh:donatemodal' && i.customId !== 'bh:giftmodal') return;
+  const live = liveTransfer(i.user.id);
+  if (!live) return i.update(done(EXPIRED_TRANSFER));
+  const { p, item } = live;
+  const isGift = p.kind === 'gift';
+  const wallet = b.balances(sheet.getPoints(), i.user.id, now()).wallet;
+  const giftLeft = isGift ? giftLeftFor(i.user.id) : null;
+  const amount = b.parseAmount(i.fields.getTextInputValue('amount'));
+  const problem = b.transferProblem({ amount, min: b.minTransfer(item), wallet, giftLeft });
+  if (problem) { pendingTransfers.delete(i.user.id); return i.update(done(`❌ ${problem} Run /bhbuy to try again. Nothing was spent.`)); }
+
+  const text = isGift
+    ? b.cleanText(i.fields.getTextInputValue('note'), NOTE_MAX)
+    : b.cleanText(i.fields.getTextInputValue('message'), MESSAGE_MAX, { lines: true });
+  if (!isGift && !text) { pendingTransfers.delete(i.user.id); return i.update(done('❌ Please write a message for the admin team. Nothing was spent.')); }
+  Object.assign(p, { amount, text, at: now() });
+  const shown = escapeMarkdown(text);
+
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId('bh:xferok').setStyle(ButtonStyle.Success).setLabel(`${isGift ? 'Gift' : 'Donate'} ${amount} pts`),
+    new ButtonBuilder().setCustomId('bh:buyno').setStyle(ButtonStyle.Secondary).setLabel('Cancel'));
+  const embed = isGift
+    ? e.confirmGiftEmbed({ toId: p.toId, amount, wallet, note: shown, giftLeft })
+    : e.confirmDonateEmbed({ amount, wallet, message: shown });
+  return i.update({ content: '', embeds: [embed], components: [row] });
+}
+
+/** Confirmed: the sheet moves the points, then the admins (and for gifts, everyone) are told. */
+async function finishTransfer(i) {
+  const live = liveTransfer(i.user.id);
+  pendingTransfers.delete(i.user.id);
+  if (!live) return i.update(done(EXPIRED_TRANSFER));
+  const { p } = live;
+  if (p.kind !== 'gift' && p.kind !== 'donate') return finishExtra(i, live);
+  const isGift = p.kind === 'gift';
+  const shown = escapeMarkdown(p.text);
+  await i.update(done('⏳ Sending…'));
+  const player = await displayName(i.guild, i.user);
+  const s = S();
+  if (!isGift) await queue(checkGoal); // a goal switched on just now starts counting before this donation
+  const res = await queue(() => sheet.transfer({
+    kind: p.kind, item: p.item, player, playerId: i.user.id, amount: p.amount,
+    ...(isGift
+      ? { toPlayer: p.toName, toPlayerId: p.toId, weekStart: b.dayMs(b.mondayOf(now())), weeklyLimit: s.giftWeeklyLimit }
+      : { message: p.text })
+  }));
+  if (!res.ok) {
+    const why = /unknown action/.test(res.error) ? 'the sheet needs its Apps Script update, so tell an admin' : res.error;
+    return i.editReply(done(`❌ Not sent: ${why}. Check your wallet with /bhme before trying again.`));
+  }
+  playersDirty = true;
+
+  if (isGift) {
+    // The DM tells them; the public post only pings if their DMs are closed.
+    const toWallet = b.balances(sheet.getPoints(), p.toId, now()).wallet;
+    const dmSent = await client.users.send(p.toId, {
+      content: e.giftDm({ from: escapeMarkdown(player), amount: p.amount, note: shown, wallet: toWallet }), allowedMentions: NO_PINGS
+    }).then(() => true).catch(() => false);
+    const publicChannel = await fetchChannel(s.submissionsChannelId || s.awardsChannelId || s.boardChannelId);
+    await publicChannel?.send({
+      content: e.giftAnnouncement({ fromId: i.user.id, toId: p.toId, amount: p.amount, note: shown }),
+      allowedMentions: dmSent ? NO_PINGS : { users: [p.toId] }
+    }).catch(err => console.error(`⚠️ Could not announce gift ${res.id}: ${err.message}`));
+    const log = await fetchChannel(s.adminLogChannelId);
+    await log?.send({
+      embeds: [e.giftLogEmbed({ player, playerId: i.user.id, toPlayer: p.toName, toId: p.toId, amount: p.amount, note: shown, id: res.id })],
+      allowedMentions: NO_PINGS
+    }).catch(err => console.error(`⚠️ Could not log gift ${res.id}: ${err.message}`));
+    return i.editReply(done(`🎁 You gifted **${p.amount} pts** to <@${p.toId}>. Wallet now: **${res.wallet} pts**. Gift limit left this week: **${res.giftLeft} pts**.`));
+  }
+
+  const admin = await fetchChannel(s.shopAdminChannelId);
+  await admin?.send({
+    embeds: [e.donationAdminEmbed({ player, playerId: i.user.id, amount: p.amount, message: shown, id: res.id })],
+    allowedMentions: NO_PINGS
+  }).catch(err => console.error(`⚠️ Donation ${res.id} saved, but the admin post failed: ${err.message}`));
+  const goal = x.goalState(sheet.getShop(), sheet.getPoints(), S());
+  if (goal) {
+    await publicPost(e.goalProgressLine(escapeMarkdown(player), p.amount, goal));
+    await queue(checkGoal);
+  }
+  return i.editReply(done(`💝 Thank you! You donated **${p.amount} pts** and your message went to the admin team. Wallet now: **${res.wallet} pts**.`));
+}
+
+// ---------------------------------------------------------------------------
+// Shop extras: sponsor pots, duels, clan goal, code word, emoji
+// ---------------------------------------------------------------------------
+
+const EXTRA_MODALS = new Set(['bh:sponsormodal', 'bh:duelmodal', 'bh:wordmodal', 'bh:emojimodal']);
+
+/** A message everyone can see in the submissions thread. Pings nobody unless `ping` is given. */
+async function publicPost(content, { ping = [], components } = {}) {
+  const s = S();
+  const channel = await fetchChannel(s.submissionsChannelId || s.awardsChannelId || s.boardChannelId);
+  return channel?.send({ content, components, allowedMentions: { users: ping } })
+    .catch(err => { console.error(`⚠️ Could not post in the submissions channel: ${err.message}`); return null; });
+}
+
+/** Pays, refunds or takes back whatever sponsor pots and duels now require. Run it inside queue(). */
+async function settleExtras() {
+  if (!sheet.isAvailable()) return;
+  const rows = x.settlements(sheet.getPoints(), sheet.getBounties(), S(), now());
+  for (const row of rows) {
+    await sheet.addPoints({ ...row, time: now() });
+    playersDirty = true;
+    if (row.change > 0) await publicPost(`💰 <@${row.playerId}> ${escapeMarkdown(row.detail)}: **+${row.change} pts**`, { ping: [row.playerId] });
+    else {
+      const log = await fetchChannel(S().adminLogChannelId);
+      await log?.send({ content: `↩️ **${escapeMarkdown(row.player)}** (<@${row.playerId}>) ${escapeMarkdown(row.detail)}: **${row.change} pts**`, allowedMentions: NO_PINGS }).catch(() => {});
+    }
+  }
+  if (rows.length) await refreshBoards();
+}
+
+/** Starts the clan goal's count when it is switched on, and celebrates when it is reached. Run it inside queue(). */
+async function checkGoal() {
+  if (!sheet.isAvailable()) return;
+  const s = S();
+  const points = sheet.getPoints();
+  const goal = x.goalState(sheet.getShop(), points, s);
+  if (!goal) return;
+  if (s.goalBase === null) { await sheet.setSetting('Clan_Goal_Base', x.totalDonated(points)); return; }
+  if (goal.progress < goal.target) return;
+  const times = Math.floor(goal.progress / goal.target);
+  await sheet.setSetting('Clan_Goal_Base', s.goalBase + times * goal.target);
+  const embed = e.goalReachedEmbed(goal, times);
+  const awards = await fetchChannel(s.awardsChannelId || s.boardChannelId);
+  await awards?.send({ embeds: [embed], allowedMentions: NO_PINGS }).catch(err => console.error(`⚠️ Could not announce the clan goal: ${err.message}`));
+  const admin = await fetchChannel(s.shopAdminChannelId);
+  await admin?.send({ content: `🎯 Clan goal **${escapeMarkdown(goal.name)}** was reached. Time to organise it!`, allowedMentions: NO_PINGS }).catch(() => {});
+}
+
+/** Why these two can't duel on this bounty, or null. */
+function duelProblem(aId, bId, bounty) {
+  const points = sheet.getPoints();
+  const all = sheet.getBounties();
+  if (!bounty || now() >= b.closesAt(all, bounty, S())) return 'There is no open bounty to duel on right now.';
+  const claimed = b.activeClaims(points, bounty.weekOf).map(c => String(c.playerId));
+  if (claimed.includes(aId) || claimed.includes(bId)) return 'One of you has already claimed this bounty.';
+  if (x.openDuelOf(aId, points, all, S(), now()) || x.openDuelOf(bId, points, all, S(), now())) return 'One of you is already in a duel.';
+  return null;
+}
+
+/** A form was sent: check it and ask for confirmation. Nothing is paid yet. */
+async function handleExtraModal(i) {
+  const live = liveTransfer(i.user.id);
+  if (!live) return i.update(done(EXPIRED_TRANSFER));
+  const { p, item } = live;
+  const s = S();
+  const wallet = b.balances(sheet.getPoints(), i.user.id, now()).wallet;
+  const fail = text => { pendingTransfers.delete(i.user.id); return i.update(done(`❌ ${text} Run /bhbuy to try again. Nothing was spent.`)); };
+  let title, text, label;
+
+  if (p.kind === 'sponsor' || p.kind === 'duel') {
+    const amount = b.parseAmount(i.fields.getTextInputValue('amount'));
+    const max = p.kind === 'sponsor' ? s.sponsorMax : s.duelMaxStake;
+    const problem = b.transferProblem({ amount, min: b.minTransfer(item), wallet }) || (amount > max ? `The maximum is **${max} pts**.` : null);
+    if (problem) return fail(problem);
+    p.amount = amount;
+    if (p.kind === 'sponsor') {
+      title = `Sponsor ${p.boss}`;
+      text = `Add **${amount} pts** to the pot. The first player to claim this bounty wins the whole pot. If nobody claims it, you get your points back.\n\nWallet after: **${wallet - amount} pts**`;
+      label = `Sponsor ${amount} pts`;
+    } else {
+      title = `Duel ${p.toName}`;
+      text = `Stake **${amount} pts** against <@${p.toId}> on the **${p.boss}** bounty. The first of you to claim it takes **${amount * 2} pts**.\n` +
+        `They have ${x.DUEL_ACCEPT_HOURS} hours to accept. If they don't, or nobody claims, your stake comes back.\n\nWallet after: **${wallet - amount} pts**`;
+      label = `Challenge for ${amount} pts`;
+    }
+  } else if (p.kind === 'word') {
+    const word = i.fields.getTextInputValue('word');
+    if (!x.validWord(word)) return fail('Use 3 to 12 letters only, with no spaces or numbers.');
+    p.word = x.tidyWord(word);
+    title = "Next week's code word";
+    text = `Your word: **${p.word}**. The bot adds 2 secret digits when the bounty goes up (like **${p.word}42**), so everyone starts equal.\nThe admins can see it and may replace it if it isn't suitable.\n\nCost **${item.cost} pts** · wallet after: **${wallet - item.cost} pts**`;
+    label = `Buy for ${item.cost} pts`;
+  } else {
+    const emoji = x.parseEmoji(i.fields.getTextInputValue('emoji'), id => i.guild?.emojis.cache.has(id));
+    if (!emoji) return fail('Please send exactly one emoji (a standard one or one from this server).');
+    p.emoji = emoji;
+    title = "Winner's emoji";
+    text = `${emoji} will be added to your approved submissions for **${x.EMOJI_DAYS} days**. Buying again replaces it.\n\nCost **${item.cost} pts** · wallet after: **${wallet - item.cost} pts**`;
+    label = `Buy for ${item.cost} pts`;
+  }
+  p.at = now();
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId('bh:xferok').setStyle(ButtonStyle.Success).setLabel(label),
+    new ButtonBuilder().setCustomId('bh:buyno').setStyle(ButtonStyle.Secondary).setLabel('Cancel'));
+  return i.update({ content: '', embeds: [e.confirmEmbed(title, text)], components: [row] });
+}
+
+/** Confirmed: re-check, pay through the sheet, then do what was bought. Runs inside queue(). */
+async function runExtra(i, p, player) {
+  const s = S();
+  const base = { item: p.item, player, playerId: i.user.id };
+  if (p.kind === 'sponsor') {
+    const bounty = sheet.getBounties().find(y => y.weekOf === p.weekOf);
+    const problem = x.sponsorProblem(bounty, sheet.getPoints(), sheet.getBounties(), s, now());
+    if (problem) return { ok: false, error: problem };
+    const res = await sheet.spend({ ...base, how: 'sponsor', amount: p.amount, max: s.sponsorMax, detail: `Sponsored ${bounty.boss}`, ref: x.sponsorRef(p.weekOf) });
+    if (!res.ok) return res;
+    const pot = x.potOf(sheet.getPoints(), p.weekOf);
+    await publicPost(`💰 <@${i.user.id}> added **${p.amount} pts** to the **${escapeMarkdown(bounty.boss)}** bounty. The pot is now **${pot} pts** for the first claim!`);
+    await refreshBoards();
+    return { ok: true, text: `💰 You sponsored **${bounty.boss}** with **${p.amount} pts**. Wallet now: **${res.wallet} pts**.` };
+  }
+  if (p.kind === 'duel') {
+    const bounty = sheet.getBounties().find(y => y.weekOf === p.weekOf);
+    const problem = duelProblem(i.user.id, p.toId, bounty);
+    if (problem) return { ok: false, error: problem };
+    const created = now();
+    const ref = x.duelRef({ weekOf: p.weekOf, a: i.user.id, b: p.toId, stake: p.amount, created });
+    const res = await sheet.spend({ ...base, how: 'duel', amount: p.amount, max: s.duelMaxStake, detail: `Duel stake against ${p.toName}`, ref });
+    if (!res.ok) return res;
+    const id = `${created}:${i.user.id}`;
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(`bh:duelyes:${id}`).setStyle(ButtonStyle.Success).setLabel(`Accept (${p.amount} pts)`),
+      new ButtonBuilder().setCustomId(`bh:duelno:${id}`).setStyle(ButtonStyle.Secondary).setLabel('Decline'));
+    const posted = await publicPost(e.duelChallenge({ a: i.user.id, b: p.toId, stake: p.amount, boss: escapeMarkdown(bounty.boss), hours: x.DUEL_ACCEPT_HOURS }), { ping: [p.toId], components: [row] });
+    if (!posted) {
+      await sheet.addPoints({ time: now(), player, playerId: i.user.id, change: 0, type: b.TYPE_DUEL, detail: 'Duel cancelled (could not post it)', ref: `duelend:${x.duelTail(ref)}` });
+      await settleExtras();
+      return { ok: false, error: 'the challenge could not be posted, so your stake was returned' };
+    }
+    return { ok: true, text: `⚔️ Challenge sent to <@${p.toId}>. Wallet now: **${res.wallet} pts**.` };
+  }
+  if (p.kind === 'word') {
+    const week = b.nextOpenWeek(sheet.getBounties(), now());
+    if (x.wordTaken(s, week)) return { ok: false, error: "someone already chose next week's code word" };
+    const res = await sheet.spend({ ...base, how: 'codeword', detail: p.item, ref: `codeword:${week}`, note: p.word });
+    if (!res.ok) return res;
+    await sheet.setSetting('Next_Code_Word_Week', week);
+    await sheet.setSetting('Next_Code_Word', p.word);
+    const admin = await fetchChannel(s.shopAdminChannelId);
+    await admin?.send({ content: `🔑 **${escapeMarkdown(player)}** (<@${i.user.id}>) chose the code word **${p.word}** for the week of ${e.weekLabel(week)}. The bot adds 2 digits when it is posted.\nNot suitable? Change or clear \`Next_Code_Word\` in Settings, then /bhreload. Use /bhgive for a refund.`, allowedMentions: NO_PINGS })
+      .catch(err => console.error(`⚠️ Could not post the code word for admins: ${err.message}`));
+    return { ok: true, text: `🔑 **${p.word}** is booked for the week of **${e.weekLabel(week)}**. Keep it secret! Wallet now: **${res.wallet} pts**.` };
+  }
+  const res = await sheet.spend({ ...base, how: 'emoji', detail: `Emoji: ${p.emoji}`, ref: x.emojiRef(i.user.id), note: p.emoji });
+  if (!res.ok) return res;
+  return { ok: true, text: `${p.emoji} is yours for **${x.EMOJI_DAYS} days**. Wallet now: **${res.wallet} pts**.` };
+}
+
+async function finishExtra(i, { p }) {
+  await i.update(done('⏳ Working…'));
+  const player = await displayName(i.guild, i.user);
+  const res = await queue(() => runExtra(i, p, player));
+  if (!res.ok) {
+    const why = /unknown action/.test(res.error) ? 'the sheet needs its Apps Script update, so tell an admin' : res.error;
+    return i.editReply(done(`❌ Not done: ${why}. Check your wallet with /bhme before trying again.`));
+  }
+  playersDirty = true;
+  return i.editReply(done(res.text));
+}
+
+/** Accept / Decline buttons on a public duel challenge. */
+async function handleDuelButton(i) {
+  const [, action, created, a] = i.customId.split(':');
+  const duel = x.listDuels(sheet.getPoints()).find(d => String(d.created) === created && d.a === a);
+  if (!duel) return i.reply(ephemeral({ content: 'That duel no longer exists.' }));
+  if (i.user.id !== duel.b) return i.reply(ephemeral({ content: 'Only the challenged player can answer this.' }));
+  await i.deferUpdate();
+  const player = await displayName(i.guild, i.user);
+  const tell = content => i.followUp(ephemeral({ content }));
+  const result = await queue(async () => {
+    const fresh = x.listDuels(sheet.getPoints()).find(d => d.ref === duel.ref);
+    const { state, bounty } = x.duelOutcome(fresh, sheet.getPoints(), sheet.getBounties(), S(), now());
+    if (state !== 'waiting') return { ok: false, closed: true, error: 'This duel is already over or was already answered.' };
+    if (action === 'duelno') {
+      await sheet.addPoints({ time: now(), player, playerId: i.user.id, change: 0, type: b.TYPE_DUEL, detail: 'Duel declined', ref: `duelend:${x.duelTail(duel.ref)}` });
+      await settleExtras();
+      return { ok: true, text: `🏳️ <@${duel.b}> declined the duel. <@${duel.a}>'s stake was returned.` };
+    }
+    const claimed = b.activeClaims(sheet.getPoints(), duel.weekOf).map(c => String(c.playerId));
+    if (claimed.includes(duel.a) || claimed.includes(duel.b)) return { ok: false, error: 'One of you has already claimed this bounty.' };
+    const item = sheet.getShop().find(it => it.isDuel && it.active);
+    if (!item) return { ok: false, error: 'Duels are switched off right now.' };
+    const res = await sheet.spend({ how: 'duel', item: item.item, player, playerId: i.user.id, amount: duel.stake, detail: 'Duel stake accepted', ref: duel.ref, onceOnly: true });
+    if (!res.ok) return { ok: false, error: `Not accepted: ${res.error}.` };
+    return { ok: true, text: `⚔️ <@${duel.b}> accepted! First of <@${duel.a}> and <@${duel.b}> to claim **${escapeMarkdown(bounty.boss)}** takes **${duel.stake * 2} pts**.` };
+  });
+  if (result.ok) playersDirty = true;
+  if (result.ok || result.closed) await i.editReply({ content: result.ok ? result.text : `${i.message.content}\n\n*This duel is closed.*`, components: [], allowedMentions: NO_PINGS });
+  if (!result.ok) await tell(`❌ ${result.error}`);
+}
+
+/** The player chose an extra in /bhbuy. Returns false when it isn't one. */
+function startExtra(i, item, wallet) {
+  const s = S();
+  const min = b.minTransfer(item);
+  const stop = text => i.update(done(`${text} Nothing was spent.`));
+  const remember = extra => pendingTransfers.set(i.user.id, { item: item.item, at: now(), ...extra });
+  if (item.isSponsor) {
+    const bounty = b.currentBounty(sheet.getBounties());
+    const problem = x.sponsorProblem(bounty, sheet.getPoints(), sheet.getBounties(), s, now());
+    if (problem) return stop(problem);
+    remember({ kind: 'sponsor', weekOf: bounty.weekOf, boss: bounty.boss });
+    return i.showModal(sponsorModal({ boss: bounty.boss, min, max: Math.min(wallet, s.sponsorMax) }));
+  }
+  if (item.isDuel) {
+    const bounty = b.currentBounty(sheet.getBounties());
+    const problem = duelProblem(i.user.id, i.user.id, bounty);
+    if (problem) return stop(problem);
+    remember({ kind: 'duel', weekOf: bounty.weekOf, boss: bounty.boss });
+    const picker = new UserSelectMenuBuilder().setCustomId('bh:duelto').setPlaceholder('Choose your opponent').setMinValues(1).setMaxValues(1);
+    return i.update({ content: `⚔️ Who do you challenge on the **${bounty.boss}** bounty? You only pay after you confirm.`, embeds: [], components: [new ActionRowBuilder().addComponents(picker)] });
+  }
+  if (item.isCodeWord) { remember({ kind: 'word' }); return i.showModal(wordModal()); }
+  if (item.isEmoji) { remember({ kind: 'emoji' }); return i.showModal(emojiModal()); }
+  return false;
+}
+
 async function handleComponent(i) {
-  if (i.customId === 'bh:buy') {
+  if (i.customId.startsWith('bh:duelyes:') || i.customId.startsWith('bh:duelno:')) return handleDuelButton(i);
+
+  if (i.customId === 'bh:buy' || i.customId.startsWith('bh:menu:')) {
     const name = i.values[0];
     const item = shopItems().find(x => x.item.slice(0, 100) === name && x.active);
     const wallet = b.balances(sheet.getPoints(), i.user.id, now()).wallet;
@@ -702,7 +1059,22 @@ async function handleComponent(i) {
         ? `**${item.item}** is sold out: someone already picked the next bounty. It's back after that one goes up.`
         : `**${item.item}** is sold out.`));
     }
-    if (wallet < item.cost) return i.update({ content: `You have **${wallet} pts**; **${item.item}** costs **${item.cost} pts**.`, components: [], embeds: [] });
+    const isTransfer = item.isDonate || item.isGift || item.isSponsor || item.isDuel;
+    if (wallet < (isTransfer ? b.minTransfer(item) : item.cost)) {
+      return i.update(done(`You have **${wallet} pts**; **${item.item}** ${isTransfer ? `starts at **${b.minTransfer(item)} pts**` : `costs **${item.cost} pts**`}.`));
+    }
+    if (item.isSponsor || item.isDuel || item.isCodeWord || item.isEmoji) return startExtra(i, item, wallet);
+    if (item.isDonate) {
+      pendingTransfers.set(i.user.id, { kind: 'donate', item: item.item, at: now() });
+      return i.showModal(donateModal({ min: b.minTransfer(item), wallet }));
+    }
+    if (item.isGift) {
+      const left = giftLeftFor(i.user.id);
+      if (left < b.minTransfer(item)) return i.update(done(`You have used your gift limit for this week (**${S().giftWeeklyLimit} pts**). It resets on Monday at 00:00 UTC.`));
+      pendingTransfers.set(i.user.id, { kind: 'gift', item: item.item, at: now() });
+      const picker = new UserSelectMenuBuilder().setCustomId('bh:giftto').setPlaceholder('Choose a clannie').setMinValues(1).setMaxValues(1);
+      return i.update({ content: `🎁 Who gets the gift? You can gift up to **${Math.min(wallet, left)} pts** right now. You only pay after you confirm.`, embeds: [], components: [new ActionRowBuilder().addComponents(picker)] });
+    }
     if (item.isPick) return showPickMenu(i, item);
     const prizes = sheet.getWheel();
     if (item.isWheel && !prizes.length) return i.update({ content: 'The prize wheel has no prizes set up yet. Ask an admin.', components: [], embeds: [] });
@@ -713,7 +1085,43 @@ async function handleComponent(i) {
     return i.update({ content: '', embeds: [e.confirmBuyEmbed(item, wallet, item.isWheel ? prizes : null)], components: [row] });
   }
 
+  // A gift: the clannie is chosen, now ask how much.
+  if (i.customId === 'bh:giftto') {
+    const live = liveTransfer(i.user.id);
+    if (!live) return i.update(done(EXPIRED_TRANSFER));
+    const target = i.users.first();
+    const member = i.members?.get(target.id);
+    const refuse = target.id === i.user.id ? "You can't gift points to yourself."
+      : target.bot ? "You can't gift points to a bot."
+        : !member ? 'That person is not in this server.' : null;
+    if (refuse) { pendingTransfers.delete(i.user.id); return i.update(done(`❌ ${refuse} Run /bhbuy to try again. Nothing was spent.`)); }
+    const wallet = b.balances(sheet.getPoints(), i.user.id, now()).wallet;
+    const toName = member.displayName || target.globalName || target.username;
+    Object.assign(live.p, { toId: target.id, toName, at: now() });
+    return i.showModal(giftModal({ toName, min: b.minTransfer(live.item), max: Math.min(wallet, giftLeftFor(i.user.id)) }));
+  }
+
+  // A duel: the opponent is chosen, now ask for the stake.
+  if (i.customId === 'bh:duelto') {
+    const live = liveTransfer(i.user.id);
+    if (!live) return i.update(done(EXPIRED_TRANSFER));
+    const target = i.users.first();
+    const member = i.members?.get(target.id);
+    const bounty = sheet.getBounties().find(y => y.weekOf === live.p.weekOf);
+    const refuse = target.id === i.user.id ? "You can't duel yourself."
+      : target.bot ? "You can't duel a bot."
+        : !member ? 'That person is not in this server.' : duelProblem(i.user.id, target.id, bounty);
+    if (refuse) { pendingTransfers.delete(i.user.id); return i.update(done(`❌ ${refuse} Run /bhbuy to try again. Nothing was spent.`)); }
+    const wallet = b.balances(sheet.getPoints(), i.user.id, now()).wallet;
+    const toName = member.displayName || target.globalName || target.username;
+    Object.assign(live.p, { toId: target.id, toName, at: now() });
+    return i.showModal(duelModal({ toName, min: b.minTransfer(live.item), max: Math.min(wallet, S().duelMaxStake) }));
+  }
+
+  if (i.customId === 'bh:xferok') return finishTransfer(i);
+
   if (i.customId === 'bh:buyno') {
+    pendingTransfers.delete(i.user.id);
     pendingBuys.delete(i.user.id);
     pendingPicks.delete(i.user.id);
     return i.update({ content: 'Cancelled. Nothing was spent.', embeds: [], components: [] });
@@ -849,7 +1257,8 @@ client.on(Events.InteractionCreate, async i => {
       if (handler) await handler(i);
       return; // not ours — the event bot answers it
     }
-    if ((i.isStringSelectMenu() || i.isButton()) && i.customId.startsWith('bh:')) await handleComponent(i);
+    if ((i.isStringSelectMenu() || i.isUserSelectMenu() || i.isButton()) && i.customId.startsWith('bh:')) await handleComponent(i);
+    else if (i.isModalSubmit() && i.customId.startsWith('bh:')) await handleModal(i);
   } catch (err) {
     console.error(`❌ Interaction ${i.commandName || i.customId} failed: ${err.message}`);
     console.error(err.stack);
@@ -914,6 +1323,8 @@ async function tick() {
 
     await checkMultiplier(t);
     await checkMonthly(t);
+    await queue(settleExtras); // refunds for closed bounties and unanswered duels
+    await queue(checkGoal);
 
     if (playersDirty) {
       playersDirty = false;

@@ -17,9 +17,13 @@ const TYPE_SHOP = 'shop';
 const TYPE_ADMIN = 'admin';
 const TYPE_VOID = 'void';
 const TYPE_WHEEL = 'wheel'; // spin cost (−) and points won (+): wallet only, never leaderboards
+const TYPE_DONATION = 'donation'; // points given to the clan (−): wallet only
+const TYPE_GIFT = 'gift'; // points sent (−) / received (+): wallet only, so gifts can't boost a rank
+const TYPE_SPONSOR = 'sponsor'; // stake on a bounty pot (−) and pot won/refunded (+): wallet only
+const TYPE_DUEL = 'duel'; // duel stake (−) and pot won/refunded (+): wallet only
 
 // Types that move the wallet but never count as "earned".
-const WALLET_ONLY = new Set([TYPE_SHOP, TYPE_WHEEL]);
+const WALLET_ONLY = new Set([TYPE_SHOP, TYPE_WHEEL, TYPE_DONATION, TYPE_GIFT, TYPE_SPONSOR, TYPE_DUEL]);
 const walletOnly = p => WALLET_ONLY.has(String(p.type ?? '').trim().toLowerCase());
 
 // ---------------------------------------------------------------------------
@@ -61,7 +65,16 @@ function readSettings(raw = {}) {
     // Random order: a boss can't come back until this many weeks have passed.
     repeatCooldownWeeks: Math.max(0, Math.floor(num(raw.Repeat_Cooldown_Weeks, 8))),
     // "Pick next week's bounty": how many bounties the buyer chooses from (Discord allows 25 max).
-    pickOptions: Math.min(25, Math.max(1, Math.floor(num(raw.Pick_Options, 20))))
+    pickOptions: Math.min(25, Math.max(1, Math.floor(num(raw.Pick_Options, 20)))),
+    // Most points one player can gift per week (Monday 00:00 UTC to Sunday). 0 = gifts off.
+    giftWeeklyLimit: Math.max(0, Math.floor(num(raw.Gift_Weekly_Limit, 25))),
+    // Most points in one sponsorship / one duel stake.
+    sponsorMax: Math.max(1, Math.floor(num(raw.Sponsor_Max, 50))),
+    duelMaxStake: Math.max(1, Math.floor(num(raw.Duel_Max_Stake, 25))),
+    // Written by the bot: where the clan goal's count starts, and a bought code word.
+    goalBase: num(raw.Clan_Goal_Base, null),
+    nextCodeWord: str(raw.Next_Code_Word),
+    nextCodeWordWeek: str(raw.Next_Code_Word_Week)
   };
 }
 
@@ -574,12 +587,60 @@ function parseShop(rows) {
       // "wheel" in Delivered How = buying it spins the prize wheel.
       isWheel: /^wheel$/i.test(str(r.deliveredHow)),
       // "pick" in Delivered How = the buyer chooses next week's bounty (1 per week; the bot keeps that stock).
-      isPick: /^pick$/i.test(str(r.deliveredHow))
+      isPick: /^pick$/i.test(str(r.deliveredHow)),
+      // "donate" / "gift": the player chooses the amount; Cost is the minimum.
+      isDonate: /^donate$/i.test(str(r.deliveredHow)),
+      isGift: /^gift$/i.test(str(r.deliveredHow)),
+      // "sponsor" / "duel": the player chooses the amount; Cost is the minimum.
+      isSponsor: /^sponsor$/i.test(str(r.deliveredHow)),
+      isDuel: /^duel$/i.test(str(r.deliveredHow)),
+      isCodeWord: /^codeword$/i.test(str(r.deliveredHow)),
+      isEmoji: /^emoji$/i.test(str(r.deliveredHow)),
+      // "goal": not for sale. Item = the goal's name, Cost = the donated points it needs.
+      isGoal: /^goal$/i.test(str(r.deliveredHow))
     };
   }).filter(r => r.item && r.cost > 0);
 }
 
 const inStock = item => item.stock === null || item.stock > 0;
+
+// ---------------------------------------------------------------------------
+// Donations and gifts
+// ---------------------------------------------------------------------------
+
+const minTransfer = item => Math.max(1, Math.ceil(item.cost));
+
+/** Points this player has gifted since Monday 00:00 UTC. */
+function giftedThisWeek(points, playerId, at) {
+  const from = dayMs(mondayOf(at));
+  return uniquePoints(points).reduce((sum, p) => {
+    const sent = str(p.playerId) === str(playerId) && str(p.type).toLowerCase() === TYPE_GIFT &&
+      num(p.change, 0) < 0 && Number(p.time) >= from;
+    return sent ? sum - num(p.change, 0) : sum;
+  }, 0);
+}
+
+/** A typed amount as a whole number, or null. */
+function parseAmount(text) {
+  const t = str(text);
+  return /^\d{1,7}$/.test(t) ? Number(t) : null;
+}
+
+/** Why this amount can't be sent, or null when it is fine. `giftLeft` is only for gifts. */
+function transferProblem({ amount, min, wallet, giftLeft = null }) {
+  if (amount === null || amount < 1) return 'Please type a whole number of points, like 5.';
+  if (amount < min) return `The minimum is **${min} pts**.`;
+  if (amount > wallet) return `You only have **${wallet} pts**.`;
+  if (giftLeft !== null && amount > giftLeft) return `You can only gift **${giftLeft} more pts** this week. The limit resets on Monday at 00:00 UTC.`;
+  return null;
+}
+
+/** Player-typed text, tidied. Line breaks are kept only when `lines` is true. */
+function cleanText(text, max, { lines = false } = {}) {
+  const raw = String(text ?? '').replace(/\r/g, '');
+  const tidy = lines ? raw.replace(/[^\S\n]+/g, ' ').replace(/\n{3,}/g, '\n\n') : raw.replace(/\s+/g, ' ');
+  return tidy.trim().slice(0, max);
+}
 
 // ---------------------------------------------------------------------------
 // Prize wheel
@@ -662,7 +723,8 @@ function messageIdFrom(text) {
 }
 
 module.exports = {
-  HOUR, DAY, TYPE_FIRST, TYPE_CLAIM, TYPE_SHOP, TYPE_ADMIN, TYPE_VOID, TYPE_WHEEL,
+  HOUR, DAY, TYPE_FIRST, TYPE_CLAIM, TYPE_SHOP, TYPE_ADMIN, TYPE_VOID, TYPE_WHEEL, TYPE_DONATION, TYPE_GIFT, TYPE_SPONSOR, TYPE_DUEL,
+  minTransfer, giftedThisWeek, parseAmount, transferProblem, cleanText,
   parseWheel, wheelOdds, pickPrize, spinPlan,
   num, readSettings,
   isoDate, dayMs, mondayOf, monthKey, monthRange, hash, scheduledPostTime, CODE_WORDS, codeWordFor,

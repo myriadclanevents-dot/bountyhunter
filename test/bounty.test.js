@@ -389,4 +389,148 @@ test('wheel rows move the wallet but never earned or leaderboards', () => {
   assert.equal(b.standings(pts)[0].points, 30);
 });
 
+// --- donations and gifts ---------------------------------------------------
+test('shop marks donate and gift rows; Cost is the minimum', () => {
+  const [d, g] = b.parseShop([
+    { item: 'Donate', cost: 1, active: true, deliveredHow: 'donate' },
+    { item: 'Gift', cost: '2,5', active: true, deliveredHow: ' GIFT ' }
+  ]);
+  assert.equal(d.isDonate, true);
+  assert.equal(g.isGift, true);
+  assert.equal(b.minTransfer(d), 1);
+  assert.equal(b.minTransfer(g), 3);
+});
+
+test('gifts and donations move the wallet but never earned or leaderboards', () => {
+  const t = Date.UTC(2026, 10, 18);
+  const pts = [
+    { time: t, player: 'A', playerId: '1', change: 20, type: 'claim', opId: 'a' },
+    { time: t, player: 'A', playerId: '1', change: -5, type: 'gift', opId: 'b-out' },
+    { time: t, player: 'B', playerId: '2', change: 5, type: 'gift', opId: 'b-in' },
+    { time: t, player: 'A', playerId: '1', change: -3, type: 'donation', opId: 'c' }
+  ];
+  assert.deepEqual(b.balances(pts, '1', t), { wallet: 12, earned: 20, month: 20 });
+  assert.deepEqual(b.balances(pts, '2', t), { wallet: 5, earned: 0, month: 0 });
+  assert.deepEqual(b.standings(pts).map(r => r.playerId), ['1']);
+});
+
+test('weekly gift total resets on Monday 00:00 UTC and ignores gifts received', () => {
+  const monday = Date.UTC(2026, 10, 16);
+  const pts = [
+    { time: monday - 1, playerId: '1', change: -20, type: 'gift', opId: 'old' },
+    { time: monday, playerId: '1', change: -7, type: 'gift', opId: 'new' },
+    { time: monday, playerId: '1', change: -7, type: 'gift', opId: 'new' },
+    { time: monday + 1, playerId: '1', change: 9, type: 'gift', opId: 'in' },
+    { time: monday + 1, playerId: '1', change: -4, type: 'shop', opId: 'shop' }
+  ];
+  assert.equal(b.giftedThisWeek(pts, '1', monday + b.DAY), 7);
+  assert.equal(b.readSettings({}).giftWeeklyLimit, 25);
+  assert.equal(b.readSettings({ Gift_Weekly_Limit: 0 }).giftWeeklyLimit, 0);
+});
+
+test('transfer amounts are whole, above the minimum and affordable', () => {
+  assert.equal(b.parseAmount(' 12 '), 12);
+  for (const bad of ['1.5', '-3', 'ten', '']) assert.equal(b.parseAmount(bad), null);
+  const check = (amount, giftLeft = null) => b.transferProblem({ amount, min: 2, wallet: 10, giftLeft });
+  assert.equal(check(5), null);
+  assert.match(check(null), /whole number/);
+  assert.match(check(1), /minimum/);
+  assert.match(check(11), /only have/);
+  assert.match(check(5, 4), /4 more/);
+  assert.equal(b.cleanText(' a\n\n  b ', 10), 'a b');
+  assert.equal(b.cleanText('a\n\n\n\nb', 10, { lines: true }), 'a\n\nb');
+});
+
+// --- shop extras ------------------------------------------------------------
+{
+  const x = require('../extras');
+  const T0 = Date.UTC(2026, 10, 23, 12);
+  const week = '2026-11-23';
+  const open = [{ weekOf: week, boss: 'Nex', postedAt: T0, parts: [] }];
+  const closed = [...open, { weekOf: '2026-11-30', boss: 'Zuk', postedAt: T0 + 7 * b.DAY, parts: [] }];
+  const stake = (id, n, ref, type = 'sponsor') => ({ time: T0 + 1, player: `P${id}`, playerId: id, change: -n, type, ref, opId: `s${id}${ref}` });
+  const claim = (id, t, first = true) => ({ time: t, player: `P${id}`, playerId: id, change: 10, type: first ? 'first claim' : 'claim', weekOf: week, ref: b.claimRef(week, id), opId: `c${id}` });
+  const voidOf = id => ({ time: T0 + 9, player: `P${id}`, playerId: id, change: -10, type: 'void', weekOf: week, ref: b.claimRef(week, id), opId: `v${id}` });
+  const pay = (pts, bounties, at = T0 + 5) => x.settlements(pts, bounties, S, at);
+  const apply = (pts, rows) => [...pts, ...rows.map(r => ({ ...r, time: T0 + 8 }))];
+
+  test('sponsor pot: waits, goes to the first claimer, once only', () => {
+    let pts = [stake('1', 5, x.sponsorRef(week)), stake('2', 10, x.sponsorRef(week))];
+    assert.equal(x.potOf(pts, week), 15);
+    assert.deepEqual(pay(pts, open), []);
+    pts.push(claim('3', T0 + 2));
+    const rows = pay(pts, open);
+    assert.deepEqual(rows.map(r => [r.playerId, r.change]), [['3', 15]]);
+    pts = apply(pts, rows);
+    assert.deepEqual(pay(pts, open), []);
+    assert.equal(b.balances(pts, '3', T0).earned, 10); // the pot is never "earned"
+    assert.match(x.sponsorProblem(open[0], pts, open, S, T0 + 5), /already been claimed/);
+  });
+
+  test('sponsor pot: refunded when the bounty closes unclaimed', () => {
+    const pts = [stake('1', 5, x.sponsorRef(week)), stake('2', 10, x.sponsorRef(week))];
+    assert.deepEqual(pay(pts, closed, T0 + 8 * b.DAY).map(r => [r.playerId, r.change]), [['1', 5], ['2', 10]]);
+  });
+
+  test('sponsor pot: a voided winner loses it and the next claimer gets it', () => {
+    let pts = [stake('1', 5, x.sponsorRef(week)), claim('3', T0 + 2), claim('4', T0 + 3, false)];
+    pts = apply(pts, pay(pts, open));
+    pts.push(voidOf('3'));
+    const rows = pay(pts, open);
+    assert.deepEqual(rows.map(r => [r.playerId, r.change]).sort(), [['3', -5], ['4', 5]]);
+    assert.equal(new Set(rows.map(r => r.opId)).size, 2);
+    assert.deepEqual(pay(apply(pts, rows), open), []);
+  });
+
+  test('duel: unanswered or declined refunds, accepted pays the first claimer', () => {
+    const ref = x.duelRef({ weekOf: week, a: '1', b: '2', stake: 5, created: T0 });
+    const a = stake('1', 5, ref, 'duel');
+    assert.equal(x.openDuelOf('2', [a], open, S, T0 + 1).ref, ref);
+    assert.deepEqual(pay([a], open), []);
+    assert.deepEqual(pay([a], open, T0 + 25 * b.HOUR).map(r => [r.playerId, r.change]), [['1', 5]]);
+    const no = { time: T0 + 2, playerId: '2', change: 0, type: 'duel', ref: `duelend:${x.duelTail(ref)}`, opId: 'no' };
+    assert.deepEqual(pay([a, no], open).map(r => [r.playerId, r.change]), [['1', 5]]);
+    const both = [a, stake('2', 5, ref, 'duel')];
+    assert.deepEqual(pay(both, open, T0 + 30 * b.HOUR), []); // accepted: no time limit
+    assert.deepEqual(pay(both, closed, T0 + 8 * b.DAY).map(r => [r.playerId, r.change]), [['1', 5], ['2', 5]]);
+    const won = [...both, claim('9', T0 + 2), claim('2', T0 + 3, false)];
+    assert.deepEqual(pay(won, open).map(r => [r.playerId, r.change]), [['2', 10]]);
+    assert.equal(x.openDuelOf('1', won, open, S, T0 + 5), null);
+  });
+
+  test('clan goal counts donations from its start point; the goal row is not for sale', () => {
+    const shop = b.parseShop([{ item: 'Party', cost: 100, active: true, deliveredHow: 'goal' }]);
+    assert.equal(shop[0].isGoal, true);
+    const pts = [{ time: 1, playerId: '1', change: -30, type: 'donation', opId: 'd' }];
+    assert.equal(x.goalState(shop, pts, { goalBase: null }).progress, 0);
+    assert.deepEqual([x.goalState(shop, pts, { goalBase: 10 }).progress, x.goalState(shop, pts, { goalBase: 10 }).target], [20, 100]);
+    assert.equal(x.progressBar(50, 100), '▰▰▰▰▰▱▱▱▱▱');
+    assert.equal(x.progressBar(500, 100), '▰'.repeat(10));
+  });
+
+  test('bought code word gets digits and only applies to its week', () => {
+    assert.ok(x.validWord('Banana'));
+    for (const bad of ['ab', 'two words', 'abc1']) assert.equal(x.validWord(bad), false);
+    assert.match(x.boughtCodeWord('banana', week, 'salt'), /^Banana\d\d$/);
+    const s = { nextCodeWord: 'Banana', nextCodeWordWeek: week };
+    assert.equal(x.wordForPost(s, T0), 'Banana');
+    assert.equal(x.wordForPost(s, T0 + 7 * b.DAY), '');
+    assert.equal(x.wordTaken(s, week), true);
+    assert.equal(x.wordTaken(s, '2026-11-30'), false);
+  });
+
+  test("winner's emoji: one emoji only, lasts 30 days, newest wins", () => {
+    assert.equal(x.parseEmoji('🐉'), '🐉');
+    assert.equal(x.parseEmoji('🐉🐉'), null);
+    assert.equal(x.parseEmoji('hello'), null);
+    const custom = '<:gz:123456789012345678>';
+    assert.equal(x.parseEmoji(custom), null);
+    assert.equal(x.parseEmoji(custom, id => id === '123456789012345678'), custom);
+    const row = (d, t) => ({ time: t, playerId: '1', change: -15, type: 'shop', detail: `Emoji: ${d}`, ref: x.emojiRef('1'), opId: d });
+    const pts = [row('🐉', T0), row('🔥', T0 + 1)];
+    assert.equal(x.activeEmoji(pts, '1', T0 + 2), '🔥');
+    assert.equal(x.activeEmoji(pts, '1', T0 + 31 * b.DAY), null);
+  });
+}
+
 console.log(`bounty: ${passed} tests passed`);

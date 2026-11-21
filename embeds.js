@@ -4,6 +4,7 @@
 // OWN timezone automatically.
 
 const b = require('./bounty');
+const x = require('./extras');
 
 const GOLD = 0xF0B232;
 const RED = 0xF23F43;
@@ -40,14 +41,14 @@ function partFields(bounty) {
  * State of a bounty for the pinned post and /bhbounty.
  * `claims` are active claim rows for this week (oldest first).
  */
-function bountyView(bounty, { claims, inProgress, settings, now, closed }) {
+function bountyView(bounty, { claims, inProgress, settings, now, closed, pot = 0 }) {
   const first = claims.find(c => String(c.type).toLowerCase() === b.TYPE_FIRST) || null;
   const multStart = b.multiplierStartsAt(bounty, settings);
   const multOn = b.multiplierActive(bounty, settings, claims.length, now);
   const firstBase = bounty.firstPoints ?? settings.defaultFirst;
   const later = bounty.laterPoints ?? settings.defaultLater;
   const firstNow = multOn ? Math.round(firstBase * settings.multiplier) : firstBase;
-  return { first, multStart, multOn, firstBase, firstNow, later, claims, inProgress, closed };
+  return { first, multStart, multOn, firstBase, firstNow, later, claims, inProgress, closed, pot };
 }
 
 /** The pinned weekly bounty post. */
@@ -94,6 +95,9 @@ function boardEmbed(bounty, view, settings, links = {}) {
   if (bounty.chosenById) fields.push({ name: '🎯 Chosen by', value: `<@${bounty.chosenById}>`, inline: false });
   fields.push({ name: 'First claim', value: view.first ? `Taken by ${view.first.player}` : `**${view.firstNow} pts**${view.multOn ? ` ~~${view.firstBase}~~` : ''}`, inline: true });
   fields.push({ name: 'Later claims', value: `${view.later} pts each`, inline: true });
+  if (view.pot > 0) {
+    fields.push({ name: '💰 Sponsor pot', value: view.first ? `**${view.pot} pts** went to ${view.first.player}` : view.closed ? `**${view.pot} pts** refunded` : `**${view.pot} pts** extra for the first claim`, inline: true });
+  }
   if (!view.first && !view.closed && view.multStart && !view.multOn) {
     fields.push({ name: `×${settings.multiplier} multiplier`, value: `${ts(view.multStart)} if still unclaimed`, inline: true });
   }
@@ -230,15 +234,20 @@ function meEmbed({ player, balance, monthRank, allRank, stats, recent }) {
   };
 }
 
-function shopEmbed(items, wallet) {
+/** A shop price: donations and gifts show their minimum. */
+const priceText = it => (it.isDonate || it.isGift || it.isSponsor || it.isDuel ? `from ${b.minTransfer(it)} pts` : `${it.cost} pts`);
+
+const goalText = g => `🎯 **${g.name}**: ${x.progressBar(g.progress, g.target)} **${g.progress}/${g.target} pts** donated`;
+
+function shopEmbed(items, wallet, goal = null) {
   const lines = items.map((it, i) => {
     const stock = it.stock === null ? '' : it.stock > 0 ? ` · ${it.stock} left` : ' · sold out';
-    return `**${i + 1}. ${it.item}** — ${it.cost} pts${stock}${it.description ? `\n${it.description}` : ''}`;
+    return `**${i + 1}. ${it.item}** — ${priceText(it)}${stock}${it.description ? `\n${it.description}` : ''}`;
   });
   return {
     color: GOLD,
     title: '🛒 Bounty Shop',
-    description: clip(`Your wallet: **${wallet} pts**\n\n${lines.join('\n\n') || 'The shop is empty right now.'}`, 4000),
+    description: clip(`Your wallet: **${wallet} pts**${goal ? `\n${goalText(goal)}` : ''}\n\n${lines.join('\n\n') || 'The shop is empty right now.'}`, 4000),
     footer: { text: 'Buy with /bhbuy' }
   };
 }
@@ -336,6 +345,73 @@ ${text}${reason ? `
   };
 }
 
+const quoted = text => text.split('\n').map(line => `> ${line}`).join('\n');
+
+function confirmDonateEmbed({ amount, wallet, message }) {
+  return {
+    color: BLURPLE,
+    title: 'Confirm donation',
+    description: clip(`Donate **${amount} pts** to the clan. Your message goes to the admin team:\n${quoted(message)}\n\n` +
+      `Wallet after: **${wallet - amount} pts**\nYour earned points and rank stay the same. Donations can't be undone by you.`, 4000)
+  };
+}
+
+function confirmGiftEmbed({ toId, amount, wallet, note, giftLeft }) {
+  return {
+    color: BLURPLE,
+    title: 'Confirm gift',
+    description: clip(`Gift **${amount} pts** to <@${toId}>.${note ? `\nYour note, shown publicly:\n${quoted(note)}` : ''}\n\n` +
+      `Wallet after: **${wallet - amount} pts** · gift limit left this week: **${giftLeft - amount} pts**\n` +
+      'Everyone will see this gift. It can be spent, but it does not count as earned points or on leaderboards.', 4000)
+  };
+}
+
+/** Shop admin channel: nothing to deliver, just the message. */
+function donationAdminEmbed({ player, playerId, amount, message, id }) {
+  return {
+    color: GREEN,
+    description: clip(`💝 **${player}** (<@${playerId}>) donated **${amount} pts** to the clan:\n${quoted(message)}`, 4000),
+    footer: { text: `Donation ${id}` },
+    timestamp: new Date().toISOString()
+  };
+}
+
+/** The public gift post. `note` must already be cleaned and escaped. */
+const giftAnnouncement = ({ fromId, toId, amount, note }) =>
+  `🎁 <@${fromId}> gifted **${amount} pts** to <@${toId}>!${note ? `\n> ${note}` : ''}`;
+
+/** The private message to the person who received a gift. */
+const giftDm = ({ from, amount, note, wallet }) =>
+  `🎁 **${from}** gifted you **${amount} Bounty Hunter points**!${note ? `\n> ${note}` : ''}\nYour wallet: **${wallet} pts**. Spend them with /bhbuy.`;
+
+const confirmEmbed = (title, text) => ({ color: BLURPLE, title, description: clip(text, 4000) });
+
+const goalProgressLine = (player, amount, goal) =>
+  `💝 **${player}** donated **${amount} pts** to the clan.\n${goalText(goal)}`;
+
+function goalReachedEmbed(goal, times = 1) {
+  return {
+    color: GOLD,
+    title: `🎉 Clan goal reached: ${goal.name}`,
+    description: clip(`Together you donated **${goal.target} pts**${times > 1 ? ` (${times} times over!)` : ''}. The admins will organise it. Thank you!`, 4000)
+  };
+}
+
+const duelChallenge = ({ a, b: opponent, stake, boss, hours }) =>
+  `⚔️ <@${a}> challenges <@${opponent}> to a **${boss}** bounty duel for **${stake} pts each**!\n` +
+  `The first of you to claim this bounty takes **${stake * 2} pts**. If neither claims it, both are refunded.\n` +
+  `<@${opponent}>, you have ${hours} hours to answer.`;
+
+function giftLogEmbed({ player, playerId, toPlayer, toId, amount, note, id }) {
+  return {
+    color: GREY,
+    description: clip(`🎁 **${player}** (<@${playerId}>) gifted **${amount} pts** to **${toPlayer}** (<@${toId}>).` +
+      `${note ? `\n📝 ${note}` : ''}\nTo undo: use \`/bhgive\` to take the points back and return them.`, 4000),
+    footer: { text: `Gift ${id}` },
+    timestamp: new Date().toISOString()
+  };
+}
+
 function pastEmbed(rows) {
   return {
     color: GREY,
@@ -410,5 +486,7 @@ function helpEmbed(settings, { admin = false, pinned = false } = {}) {
 module.exports = {
   ts, weekLabel, shownWeek, bountyView, boardEmbed, progressEmbed, claimEmbed, multiplierEmbed, newBountyEmbed,
   table, leaderboardEmbed, monthlyWinnersEmbed, meEmbed, shopEmbed, confirmBuyEmbed, confirmPickEmbed, pickAdminEmbed, adminPurchaseEmbed, pastEmbed,
-  wheelOddsText, spinFrameEmbed, adminLogEmbed, helpEmbed, GUIDE_TITLE
+  wheelOddsText, spinFrameEmbed, adminLogEmbed, helpEmbed, GUIDE_TITLE,
+  priceText, confirmDonateEmbed, confirmGiftEmbed, donationAdminEmbed, giftAnnouncement, giftLogEmbed,
+  giftDm, confirmEmbed, goalText, goalProgressLine, goalReachedEmbed, duelChallenge
 };

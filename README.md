@@ -19,6 +19,14 @@ event bot (bingo / drop race) is live.
 | `Awards_Channel_ID` | Claim announcements, multiplier alerts, monthly top 3 on the 1st. |
 | `/bhbuy` | Player buys; the sheet checks wallet + stock; admins get a ping in `Shop_Admin_Channel_ID` and react ✅ when delivered. |
 | Prize wheel | A Shop item with **Delivered How = `wheel`**. Buying it picks a prize (weights in the **Wheel** tab) and spins it in `Wheel_Channel_ID` (empty = the submissions channel): one message edited ~10 times over ~14 s. Points prizes go straight to the wallet; item prizes ping the admin channel like a purchase. |
+| Donate to clan | A Shop item with **Delivered How = `donate`**. **Cost = the minimum** (points). The player types an amount and a message; the points are removed, the message goes to `Shop_Admin_Channel_ID` and is saved in the Purchases tab. |
+| Gift to a clannie | A Shop item with **Delivered How = `gift`**. **Cost = the minimum** (points). The player chooses a member, an amount and an optional public note. Limit per sender: `Gift_Weekly_Limit` points per week, Monday 00:00 UTC (optional Settings row, default 25, 0 = off). Posted in the submissions channel (no ping) and the admin log; the receiver gets a DM (if DMs are closed, the post pings them instead). Gifts can be spent but never count as earned. |
+| Shop extras | Added by `setupBountyHunter` as Shop rows with **Active = FALSE**; set Active to switch each one on. Points from these never count as earned. |
+| Clan goal | **Delivered How = `goal`**. Item = goal name, **Cost = donated points needed**. Not for sale: it shows a progress bar in `/bhshop`, and donations fill it from the moment it is switched on (`Clan_Goal_Base` in Settings is bot-managed). When reached it is announced and restarts. |
+| Sponsor this bounty | **Delivered How = `sponsor`**. **Cost = minimum**, `Sponsor_Max` = maximum (default 50). Points go in the current bounty's pot until its first claim. First claimer wins it; refunded if the bounty closes unclaimed. |
+| Bounty duel | **Delivered How = `duel`**. **Cost = minimum stake**, `Duel_Max_Stake` = maximum (default 25). The opponent has 24 hours to accept. First of the two to claim takes both stakes; otherwise both are refunded. One open duel per player. |
+| Code word | **Delivered How = `codeword`**, fixed Cost. The buyer's word + 2 digits added at posting is used for the next Monday bounty. Stored in `Next_Code_Word`; admins can change or clear it. |
+| Winner's emoji | **Delivered How = `emoji`**, fixed Cost. The bot adds it to the buyer's approved submissions for 30 days. |
 
 ### Part cells
 - `Kerapac` → any drop of that boss (boss names come from the **Drops** tab)
@@ -31,7 +39,7 @@ Admins (Approvers tab or Manage Server): `/bhvoid` `/bhgive` `/bhpost` `/bhreloa
 
 ### Points
 Everything is logged in the **Points** tab, one line per change. Wallet = sum of
-all lines. Earned = all lines except shop purchases and wheel winnings (type `wheel`). Leaderboards use Earned.
+all lines. Earned = all lines except shop purchases, wheel lines (type `wheel`), donations, gifts, sponsor pots and duels. Leaderboards use Earned.
 Fix mistakes with `/bhvoid` (undo an approval) and `/bhgive` (± points) — never
 by editing the grey tabs.
 

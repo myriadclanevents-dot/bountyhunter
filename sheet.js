@@ -182,6 +182,26 @@ async function buy({ item, player, playerId, wheelPrize = null, pick = null }) {
   return res;
 }
 
+/** A donation or gift: the sheet checks the wallet and weekly limit and writes it in one locked step. */
+async function transfer(details) {
+  const res = await post({ action: 'transfer', ...details, time: Date.now(), opId: newOpId() });
+  if (res.ok) {
+    state.points.push(...res.points);
+    if (res.purchase) state.purchases.push(res.purchase);
+  }
+  return res;
+}
+
+/** Pays for a shop extra (sponsor, duel, code word, emoji): checked and written in one locked step. */
+async function spend(details) {
+  const res = await post({ action: 'spend', ...details, time: Date.now(), opId: newOpId() });
+  if (res.ok) {
+    state.points.push(res.points);
+    if (res.purchase) state.purchases.push(res.purchase);
+  }
+  return res;
+}
+
 /** Saves a posted bounty in the History tab (adds its row, or fills in the row of a player's pick). */
 async function markPosted(bounty, postedAt, messageId, codeWord = '') {
   const row = b.historyRow(bounty, bounty.weekOf, { codeWord: bounty.codeWord || codeWord, postedAt, messageId });
@@ -218,7 +238,7 @@ const writePlayers = rows => post({ action: 'players', rows });
 
 module.exports = {
   configure, loadAll, refreshConfig, warnings,
-  addSubmission, addPoints, buy, markPosted, setPurchaseMessage, setPurchaseDelivered, setSetting, writePlayers,
+  addSubmission, addPoints, buy, transfer, spend, markPosted, setPurchaseMessage, setPurchaseDelivered, setSetting, writePlayers,
   isAvailable: () => available,
   isDegraded: () => degraded,
   getBounties: () => bounties,

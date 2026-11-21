@@ -151,4 +151,22 @@ test('pick: confirm shows week, parts and points; chosen-by on the post; cooldow
   assert.match(e.helpEmbed(s).fields[0].value, /within 6 weeks/);
 });
 
+test('donation and gift text and forms', () => {
+  const { donateModal, giftModal, sponsorModal, duelModal, wordModal, emojiModal } = require('../donations');
+  for (const m of [sponsorModal({ boss: 'B'.repeat(60), min: 5, max: 50 }), duelModal({ toName: 'x', min: 5, max: 25 }), wordModal(), emojiModal()]) {
+    assert.ok(m.toJSON().title.length <= 45);
+  }
+  assert.equal(e.priceText({ cost: 5, isSponsor: true }), 'from 5 pts');
+  assert.match(e.giftDm({ from: 'A', amount: 5, note: '', wallet: 9 }), /wallet: \*\*9 pts/);
+  assert.match(e.shopEmbed([], 3, { name: 'Party', target: 100, progress: 25 }).description, /25\/100/);
+  assert.match(e.duelChallenge({ a: '1', b: '2', stake: 5, boss: 'Nex', hours: 24 }), /takes \*\*10 pts/);
+  assert.equal(e.priceText({ cost: 1, isGift: true }), 'from 1 pts');
+  assert.equal(e.priceText({ cost: 20 }), '20 pts');
+  assert.match(e.donationAdminEmbed({ player: 'A', playerId: '1', amount: 5, message: 'hi\nthere', id: 'D1' }).description, /> hi\n> there/);
+  assert.equal(e.giftAnnouncement({ fromId: '1', toId: '2', amount: 5, note: '' }), '🎁 <@1> gifted **5 pts** to <@2>!');
+  assert.match(e.confirmGiftEmbed({ toId: '2', amount: 5, wallet: 9, note: 'gz', giftLeft: 25 }).description, /left this week: \*\*20 pts/);
+  assert.equal(donateModal({ min: 1, wallet: 9 }).toJSON().components.length, 2);
+  assert.equal(giftModal({ toName: 'x'.repeat(60), min: 1, max: 9 }).toJSON().title.length, 45);
+});
+
 console.log(`embeds: ${passed} tests passed`);

@@ -189,6 +189,7 @@ footer { color: var(--muted); font-size: 0.85rem; border-top: 1px solid var(--li
   <p class="note">Runs all the time, including during bingo and drop races. Bounty Hunter commands all start with <span class="cmd">/bh</span> so they never mix with event commands.</p>
   <nav class="toc" aria-label="Sections">
     <a href="#week">How a week works</a>
+    <a href="#order">Which boss comes up</a>
     <a href="#points">Points</a>
     <a href="#pinned">Pinned bounty</a>
     <a href="#submit">Submitting</a>
@@ -197,6 +198,8 @@ footer { color: var(--muted); font-size: 0.85rem; border-top: 1px solid var(--li
     <a href="#help">Help &amp; guide</a>
     <a href="#leaderboard">Leaderboards</a>
     <a href="#shop">Shop</a>
+    <a href="#pick">Pick the bounty</a>
+    <a href="#wheel">Prize wheel</a>
     <a href="#questions">Questions for admins</a>
   </nav>
 </header>
@@ -212,7 +215,7 @@ footer { color: var(--muted); font-size: 0.85rem; border-top: 1px solid var(--li
     <div class="tl-step">
       <span class="tl-when">MON · random hour</span>
       <strong>New bounty posted</strong>
-      <p>The bot picks a random hour on Monday (00:00–23:00 UTC), posts the new boss with this week's <strong>code word</strong> and pins it. Last week's bounty closes.</p>
+      <p>The bot picks a random hour on Monday (00:00–23:00 UTC) and a <strong>random boss</strong>, posts it with this week's <strong>code word</strong> and pins it. Last week's bounty closes.</p>
     </div>
     <div class="tl-step">
       <span class="tl-when">MON → THU</span>
@@ -229,6 +232,33 @@ footer { color: var(--muted); font-size: 0.85rem; border-top: 1px solid var(--li
       <strong>Everyone can still claim</strong>
       <p>One claim per player. The pinned post updates live as people claim, until the next bounty replaces it.</p>
     </div>
+  </div>
+</section>
+
+<!-- ORDER -->
+<section id="order">
+  <div class="sec-head">
+    <span class="eyebrow">Random order · live since 17 Nov</span>
+    <h2>Which boss comes up</h2>
+    <p>Admins keep a list of bounties in the <strong>Bounties</strong> tab of the sheet. Every Monday the bot draws one at random, so nobody knows in advance which boss is next. The same boss can be in the list more than once with a different task.</p>
+  </div>
+  <div class="rules">
+    <div class="rule"><span class="big">8 weeks</span><strong>No quick repeats</strong><p>A boss can't come back within 8 weeks, even with a different task. Admins can change the number of weeks in the Settings tab (<code>Repeat_Cooldown_Weeks</code>).</p></div>
+    <div class="rule"><span class="big">1st</span><strong>A player's pick goes first</strong><p>If someone bought <strong>Pick next week's bounty</strong> in the shop, their choice goes up that Monday instead of a random one. <a href="#pick" style="color:var(--accent)">See how it works</a>.</p></div>
+    <div class="rule"><span class="big">📅</span><strong>Admins can still force a week</strong><p>Leave <strong>Week Of</strong> empty for random order. Type a Monday date on a row to make that boss come up that week (for an event or a special week).</p></div>
+  </div>
+  <p class="note">Every week the bot writes what went up in a new <strong>History</strong> tab: the boss, the drops needed, the points, the code word, when it was posted and who chose it. Admins don't edit that tab; it is the record the claims are linked to.</p>
+
+  <h3>Posting early with /bhpost</h3>
+  <p>An admin can put a bounty up straight away with <span class="cmd">/bhpost</span>. It never moves the Monday schedule.</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>When /bhpost is used</th><th>What goes up</th><th>Next new boss</th></tr></thead>
+      <tbody>
+        <tr><td>Monday, before that day's bounty is up</td><td>That Monday's bounty, now (including a player's pick)</td><td>Next Monday</td></tr>
+        <tr><td>Any other time, e.g. Wed 18 Nov</td><td>An <strong>extra</strong> random bounty. A waiting pick stays secret for Monday</td><td>Mon 23 Nov, as normal</td></tr>
+      </tbody>
+    </table>
   </div>
 </section>
 
@@ -462,7 +492,7 @@ footer { color: var(--muted); font-size: 0.85rem; border-top: 1px solid var(--li
     <div class="sub">Admins only</div>
     <dt>/bhvoid</dt><dd>Undo a wrong approval and take the points back.</dd>
     <dt>/bhgive</dt><dd>Add or remove points by hand, with a reason. Logged in the sheet.</dd>
-    <dt>/bhpost</dt><dd>Post next week's bounty now, without waiting for Monday.</dd>
+    <dt>/bhpost</dt><dd>Post a bounty now. Next Monday's bounty still comes as normal (see <a href="#order" style="color:var(--accent)">Posting early</a>).</dd>
     <dt>/bhreload</dt><dd>Re-read the Google Sheet after editing bounties or the shop.</dd>
   </dl>
 
@@ -604,7 +634,7 @@ footer { color: var(--muted); font-size: 0.85rem; border-top: 1px solid var(--li
   <div class="sec-head">
     <span class="eyebrow">Spending points</span>
     <h2>The shop</h2>
-    <p>The items are still to be decided. The ones below only show how it would work. Admins manage the list in the Google Sheet (name, price, stock, active). Most rewards are delivered by hand, so each purchase pings the admins to deliver it.</p>
+    <p>Admins manage the list in the Google Sheet (name, price, stock, active). Most rewards are delivered by hand, so each purchase pings the admins to deliver it. Two items work by themselves: <a href="#pick" style="color:var(--accent)">Pick next week's bounty</a> and the <a href="#wheel" style="color:var(--accent)">prize wheel</a>.</p>
   </div>
   <div class="grid-2">
     <div class="dc">
@@ -619,10 +649,11 @@ footer { color: var(--muted); font-size: 0.85rem; border-top: 1px solid var(--li
             <div class="dc-block">Item                         Cost  Stock
 1  Bond raffle ticket          15   ∞
 2  Custom role colour (30d)    25   ∞
-3  Pick next week's bounty     40   1
+3  Pick next week's bounty     50   1 a week
 4  Clan citadel shout-out      10   ∞
-5  1M GP from clan bank        60   3 left</div>
-            <div class="dc-foot">Buy with /bhbuy · Example items only</div>
+5  1M GP from clan bank        60   3 left
+6  Prize wheel spin            10   ∞</div>
+            <div class="dc-foot">Buy with /bhbuy · Items and prices from the sheet, still open to change</div>
           </div>
           <div class="dc-eph">👁 Only you can see this · <a href="#shop">Dismiss message</a></div>
         </div>
@@ -657,6 +688,98 @@ footer { color: var(--muted); font-size: 0.85rem; border-top: 1px solid var(--li
   </div>
 </section>
 
+<!-- PICK -->
+<section id="pick">
+  <div class="sec-head">
+    <span class="eyebrow">Shop item · live since 17 Nov</span>
+    <h2>Pick next week's bounty</h2>
+    <p>A player spends points to choose the next Monday's boss. It can be bought <strong>once a week</strong>: after someone buys it, it shows as sold out until that bounty goes up. The choice stays <strong>secret until Monday</strong>, and the buyer can claim the bounty too.</p>
+  </div>
+  <div class="rules">
+    <div class="rule"><strong>1 · Choose from a list</strong><p>The buyer gets up to 20 random bosses that weren't up in the last 8 weeks, each with its drops and points. Only they can see the list.</p></div>
+    <div class="rule"><strong>2 · Confirm, then pay</strong><p>Points are only taken after they confirm. Closing the list or waiting 5 minutes costs nothing.</p></div>
+    <div class="rule"><strong>3 · Everyone hears, nobody knows</strong><p>A public note says who bought it, without the boss. The admins get the boss name privately. Monday's post says who chose it.</p></div>
+  </div>
+  <div class="grid-2">
+    <div class="dc">
+      <div class="dc-msg">
+        <div class="dc-used"><b>Valxen</b> used <span class="slash">/bhbuy</span> item: Pick next week's bounty</div>
+        <div class="dc-av av-bot">M</div>
+        <div class="dc-body">
+          <div class="dc-name"><b>Myriad Events Bot</b><span class="dc-app">APP</span></div>
+          <div class="dc-edesc">🎯 <b>Pick next week's bounty</b> (50 pts) · week of <b>23 Nov 2026</b><br>Choose from these 17 random bounties. Only you can see this list, and your choice stays secret until it goes up.</div>
+          <div class="dc-block">▾ Choose the bounty
+  Telos — 1st 15 / later 10 pts
+  Kerapac — 1st 10 / later 5 pts
+  Nex — 1st 20 / later 10 pts
+  Vorkath — 1st 10 / later 5 pts
+  …</div>
+          <div class="dc-embed blurple">
+            <div class="dc-etitle">Pick: Telos</div>
+            <div class="dc-edesc">This will be the bounty for the week of <b>23 Nov 2026</b>.<br>Points: 1st <b>15 pts</b> · later <b>10 pts</b>. You can claim it yourself too.<br>It stays <b>secret</b> until it goes up on Monday.<br>Cost <b>50 pts</b> · wallet after: <b>35 pts</b></div>
+          </div>
+          <div class="dc-btns"><span class="dc-btn go">Buy for 50 pts</span><span class="dc-btn">Cancel</span></div>
+          <div class="dc-eph">👁 Only you can see this · <a href="#pick">Dismiss message</a></div>
+        </div>
+      </div>
+    </div>
+    <div class="dc">
+      <div class="dc-chan"># <b>bounty-board</b></div>
+      <div class="dc-msg">
+        <div class="dc-av av-bot">M</div>
+        <div class="dc-body">
+          <div class="dc-name"><b>Myriad Events Bot</b><span class="dc-app">APP</span><span class="dc-time">Wed 20:14 UTC</span></div>
+          <div>🎯 <span style="color:var(--dc-link);background:#3C4270;border-radius:3px;padding:0 2px">@Valxen</span> bought <b>Pick next week's bounty</b>! Their choice stays secret until it goes up on Monday 23 Nov 2026.</div>
+        </div>
+      </div>
+      <div class="dc-msg">
+        <div class="dc-av av-bot">M</div>
+        <div class="dc-body">
+          <div class="dc-name"><b>Myriad Events Bot</b><span class="dc-app">APP</span><span class="dc-time">in #admin-shop</span></div>
+          <div class="dc-embed green">
+            <div class="dc-edesc">🎯 <b>Valxen</b> bought <b>Pick next week's bounty</b> for 50 pts and chose <b>Telos</b> for the week of <b>23 Nov 2026</b>. Nothing to deliver: the bot posts it on Monday. Keep it secret!</div>
+          </div>
+        </div>
+      </div>
+      <div class="dc-msg">
+        <div class="dc-av av-bot">M</div>
+        <div class="dc-body">
+          <div class="dc-name"><b>Myriad Events Bot</b><span class="dc-app">APP</span><span class="dc-time">Mon 09:51 UTC</span></div>
+          <div class="dc-embed">
+            <div class="dc-ehead">🎯 BOUNTY · WEEK OF 23 NOV 2026</div>
+            <div class="dc-etitle">Telos</div>
+            <div class="dc-field"><div class="dc-fname">🎯 Chosen by</div><span style="color:var(--dc-link)">@Valxen</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p class="note">To undo a pick, an admin deletes its row in the History tab and gives the points back with <span class="cmd">/bhgive</span>.</p>
+</section>
+
+<!-- WHEEL -->
+<section id="wheel">
+  <div class="sec-head">
+    <span class="eyebrow">Shop item · live since 16 Nov</span>
+    <h2>The prize wheel</h2>
+    <p>Buying a <strong>Prize wheel spin</strong> spins a wheel in Discord: one message that slows down over about 14 seconds and stops on the prize. The odds are shown before buying. Admins set the prizes and their chances in the <strong>Wheel</strong> tab.</p>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Prize (current draft)</th><th class="num">Chance</th><th>What happens</th></tr></thead>
+      <tbody>
+        <tr><td>+5 pts</td><td class="num">40%</td><td>Added to the wallet straight away</td></tr>
+        <tr><td>Nothing</td><td class="num">25%</td><td>No prize</td></tr>
+        <tr><td>+20 pts</td><td class="num">15%</td><td>Added to the wallet straight away</td></tr>
+        <tr><td>5m GP</td><td class="num">15%</td><td>An admin pays it in game (admins get a ✅ post)</td></tr>
+        <tr><td>Custom Discord role (30 days)</td><td class="num">4%</td><td>An admin gives the role (admins get a ✅ post)</td></tr>
+        <tr><td>JACKPOT: Bond</td><td class="num">1%</td><td>An admin hands it out (admins get a ✅ post)</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="note">Points won on the wheel go into the wallet only. They never count toward the leaderboards, so nobody can buy their way up the rankings.</p>
+</section>
+
 <!-- QUESTIONS -->
 <section id="questions">
   <div class="sec-head">
@@ -671,7 +794,9 @@ footer { color: var(--muted); font-size: 0.85rem; border-top: 1px solid var(--li
     <li><b>Late claims</b><span>Can someone still claim last week's bounty after the new one is posted (for example within 24 hours), or does it close right away?</span></li>
     <li><b>Leaderboards</b><span>Is "this month" and "all time" enough, or do we also want "this year"? Should the monthly winner get a prize?</span></li>
     <li><b>Shop</b><span>Which items, what prices, limited stock or not, and which admins deliver them?</span></li>
-    <li><b>Who picks the bosses</b><span>Admins fill a list in the sheet in advance, or the bot picks at random from a pool?</span></li>
+    <li><b>Random order</b><span>Decided: random from the list, no boss again within 8 weeks. Is 8 weeks right, and which bosses or tasks should be added to the list?</span></li>
+    <li><b>Pick next week's bounty</b><span>Is 50 points the right price for choosing the boss?</span></li>
+    <li><b>Prize wheel</b><span>Are these the right prizes and chances, and is 10 points per spin right?</span></li>
     <li><b>Code word</b><span>Is "typed in your in-game chat" the right rule, or should it be somewhere specific (for example clan chat only)? Should the bot pick it, or do admins want to choose each week's word?</span></li>
     <li><b>Visibility</b><span>Should partial progress be public on the pinned post ("2 hunters have 1 of 2 parts") or private to each player?</span></li>
   </ol>

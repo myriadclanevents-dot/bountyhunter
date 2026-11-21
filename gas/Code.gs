@@ -41,7 +41,7 @@ var TABS = {
     ['player', 'Player', '', 'Discord display name'],
     ['playerId', 'Player ID', 'id', 'Discord user id'],
     ['change', 'Change', '', 'Points added (+) or spent/removed (−)'],
-    ['type', 'Type', '', 'first claim / claim / shop / admin / void'],
+    ['type', 'Type', '', 'first claim / claim / shop / wheel / donation / gift / sponsor / duel / admin / void'],
     ['detail', 'Detail', '', 'Which bounty, shop item or reason'],
     ['by', 'By', '', 'Admin who approved or gave the points'],
     ['weekOf', 'Week Of', 'day', 'Bounty week, for claims'],
@@ -57,7 +57,8 @@ var TABS = {
     ['deliveredBy', 'Delivered By', '', 'Admin who reacted ✅ in the admin channel'],
     ['deliveredAt', 'Delivered (UTC)', 'date', 'When it was delivered'],
     ['id', 'Purchase ID', '', 'Unique purchase id'],
-    ['adminMessageId', 'Admin Message ID', 'id', 'The ping in the admin channel']
+    ['adminMessageId', 'Admin Message ID', 'id', 'The ping in the admin channel'],
+    ['message', 'Message', '', 'What the player wrote with a donation to the clan']
   ]},
   players: { name: 'Players', cols: [
     ['player', 'Player', '', 'Discord display name'],
@@ -149,6 +150,8 @@ function doPost(e) {
       case 'submission': appendObj_(TABS.submissions, p.row); return json_({ ok: true });
       case 'points': return json_(appendPoints_(p.row));
       case 'buy': return json_(buy_(p));
+      case 'transfer': return json_(transfer_(p));
+      case 'spend': return json_(spend_(p));
       case 'bountyPosted': return json_(bountyPosted_(p));
       case 'purchaseMessage': return json_(updatePurchase_(p.id, { adminMessageId: p.adminMessageId }));
       case 'purchaseDelivered': return json_(updatePurchase_(p.id, { deliveredBy: p.deliveredBy, deliveredAt: p.deliveredAt }));
@@ -354,6 +357,106 @@ function buy_(p) {
   return { ok: false, error: 'no shop item called ' + p.item };
 }
 
+/** Text typed by a player: stored as plain text, never run as a sheet formula. */
+function safeText_(v) {
+  var s = String(v === null || v === undefined ? '' : v);
+  return /^[=+\-@]/.test(s) ? "'" + s : s;
+}
+
+/** Points this player has gifted since weekStart (ms). */
+function giftedSince_(playerId, weekStart) {
+  var seen = {};
+  return readTab_(TABS.points).reduce(function (sum, r) {
+    if (String(r.playerId) !== String(playerId) || String(r.type).trim().toLowerCase() !== 'gift') return sum;
+    if (r.opId) { if (seen[r.opId]) return sum; seen[r.opId] = true; }
+    var change = Number(String(r.change).replace(',', '.')) || 0;
+    return change < 0 && Number(r.time) >= weekStart ? sum - change : sum;
+  }, 0);
+}
+
+/** "Donate to clan" and "Gift to a clannie": every check and write in one locked step. */
+function transfer_(p) {
+  var kind = p.kind === 'gift' ? 'gift' : 'donate';
+  var want = norm_(p.item);
+  var item = readTab_(TABS.shop).filter(function (r) { return norm_(r.item) === want; })[0];
+  if (!item || norm_(item.deliveredHow) !== kind) return { ok: false, error: 'that option is not set up in the shop' };
+  if (!(item.active === true || /^(true|yes|1|x)$/i.test(String(item.active)))) return { ok: false, error: 'that option is not available right now' };
+  var cost = Number(String(item.cost).replace(',', '.'));
+  if (!(cost > 0)) return { ok: false, error: 'that option has no minimum set in the Cost column' };
+  var min = Math.max(1, Math.ceil(cost));
+  var amount = Number(p.amount);
+  if (Math.floor(amount) !== amount || amount < min) return { ok: false, error: 'the minimum is ' + min + ' pts' };
+  var wallet = walletOf_(p.playerId);
+  if (wallet < amount) return { ok: false, error: 'not enough points (wallet ' + wallet + ')' };
+
+  var time = Number(p.time) || Date.now();
+  var opId = p.opId || String(time);
+  var row = function (playerName, playerId, change, type, detail, ref, op) {
+    return { time: time, player: safeText_(playerName), playerId: playerId, change: change, type: type, detail: detail, by: '', ref: ref, opId: op };
+  };
+
+  if (kind === 'donate') {
+    var id = 'D' + time;
+    var purchase = { id: id, time: time, player: safeText_(p.player), playerId: p.playerId, item: String(item.item).trim(), cost: amount,
+      deliveredBy: 'Bot (automatic)', deliveredAt: time, message: safeText_(p.message) };
+    var paid = row(p.player, p.playerId, -amount, 'donation', 'Donation to the clan', id, opId);
+    appendObj_(TABS.purchases, purchase);
+    appendObj_(TABS.points, paid);
+    return { ok: true, id: id, purchase: purchase, points: [paid], wallet: wallet - amount };
+  }
+
+  if (!p.toPlayerId || String(p.toPlayerId) === String(p.playerId)) return { ok: false, error: 'you can only gift to another player' };
+  var limit = Number(p.weeklyLimit);
+  if (!(limit >= 0)) return { ok: false, error: 'the weekly gift limit is missing' };
+  var left = Math.max(0, limit - giftedSince_(p.playerId, Number(p.weekStart) || 0));
+  if (amount > left) return { ok: false, error: 'you can only gift ' + left + ' more pts this week' };
+  var ref = 'G' + time;
+  var sent = row(p.player, p.playerId, -amount, 'gift', 'Gift to ' + p.toPlayer, ref, opId + '-out');
+  var received = row(p.toPlayer, p.toPlayerId, amount, 'gift', 'Gift from ' + p.player, ref, opId + '-in');
+  appendObj_(TABS.points, sent);
+  appendObj_(TABS.points, received);
+  return { ok: true, id: ref, points: [sent, received], wallet: wallet - amount, giftLeft: left - amount };
+}
+
+/** Sponsor, duel, code word, emoji: checks the Shop row and wallet, then writes one Points row. */
+function spend_(p) {
+  var how = norm_(p.how);
+  if (['sponsor', 'duel', 'codeword', 'emoji'].indexOf(how) === -1) return { ok: false, error: 'unknown shop extra' };
+  var want = norm_(p.item);
+  var item = readTab_(TABS.shop).filter(function (r) { return norm_(r.item) === want; })[0];
+  if (!item || norm_(item.deliveredHow) !== how) return { ok: false, error: 'that option is not set up in the shop' };
+  if (!(item.active === true || /^(true|yes|1|x)$/i.test(String(item.active)))) return { ok: false, error: 'that option is not available right now' };
+  var cost = Number(String(item.cost).replace(',', '.'));
+  if (!(cost > 0)) return { ok: false, error: 'that option has no price in the Cost column' };
+  var fixedPrice = how === 'codeword' || how === 'emoji';
+  var amount = fixedPrice ? cost : Number(p.amount);
+  if (!fixedPrice) {
+    var min = Math.max(1, Math.ceil(cost));
+    if (Math.floor(amount) !== amount || amount < min) return { ok: false, error: 'the minimum is ' + min + ' pts' };
+    if (Number(p.max) > 0 && amount > Number(p.max)) return { ok: false, error: 'the maximum is ' + Number(p.max) + ' pts' };
+  }
+  var wallet = walletOf_(p.playerId);
+  if (wallet < amount) return { ok: false, error: 'not enough points (wallet ' + wallet + ')' };
+  var ref = String(p.ref || '');
+  if (!ref) return { ok: false, error: 'missing reference' };
+  if (p.onceOnly && readTab_(TABS.points).some(function (r) {
+    return String(r.ref) === ref && String(r.playerId) === String(p.playerId) && Number(r.change) < 0;
+  })) return { ok: false, error: 'you have already paid for this' };
+
+  var time = Number(p.time) || Date.now();
+  var type = how === 'sponsor' || how === 'duel' ? how : 'shop';
+  var row = { time: time, player: safeText_(p.player), playerId: p.playerId, change: -amount, type: type,
+    detail: safeText_(p.detail), by: '', ref: ref, opId: p.opId || ref + ':' + time };
+  var purchase = null;
+  if (fixedPrice) {
+    purchase = { id: 'X' + time, time: time, player: safeText_(p.player), playerId: p.playerId, item: String(item.item).trim(), cost: amount,
+      deliveredBy: 'Bot (automatic)', deliveredAt: time, message: safeText_(p.note) };
+    appendObj_(TABS.purchases, purchase);
+  }
+  appendObj_(TABS.points, row);
+  return { ok: true, points: row, purchase: purchase, wallet: wallet - amount };
+}
+
 /** A bought wheel spin: the prize the bot picked is saved with the purchase. */
 function wheelWin_(p, purchase) {
   var w = p.wheel;
@@ -464,6 +567,7 @@ function setupBountyHunter() {
   addWheelSettings_();
   var migrated = migrateToRandomOrder_(ss);
   addRandomOrderSettings_();
+  addShopExtras_();
   // Bot tabs: create if missing (with their full column set).
   ['submissions', 'points', 'purchases', 'players'].forEach(function (k) {
     var spec = TABS[k];
@@ -578,6 +682,32 @@ function addRandomOrderSettings_() {
     appendObj_(TABS.settings, { key: 'Pick_Options', value: '20',
       meaning: '"Pick next week\'s bounty": how many random bounties the buyer chooses from (a number from 1 to 25). Default 20' });
   }
+}
+
+/** Adds the optional extras to the Shop tab, all switched OFF. Never changes a row that exists. */
+function addShopExtras_() {
+  var extras = [
+    ['Clan goal: drop party', 100, 'Donations fill this goal. Cost = the donated points it needs', 'goal'],
+    ['Sponsor this bounty', 5, 'Add points to the pot. The first player to claim wins it. Refunded if nobody claims', 'sponsor'],
+    ['Bounty duel', 5, 'Challenge a clannie: first of you to claim this bounty takes both stakes', 'duel'],
+    ['Choose next week\'s code word', 10, 'Pick the word. The bot adds 2 secret digits when the bounty goes up', 'codeword'],
+    ['Winner\'s emoji (30 days)', 15, 'The bot adds your emoji to your approved submissions', 'emoji'],
+    ['Choose the next clan event', 75, 'Pick the boss or theme, with admin approval', 'Admin arranges the event'],
+    ['Learner session', 30, 'A clan veteran takes you on a teaching trip', 'Admin finds a teacher']
+  ];
+  var shop = readTab_(TABS.shop);
+  extras.forEach(function (x) {
+    var special = ['goal', 'sponsor', 'duel', 'codeword', 'emoji'].indexOf(x[3]) !== -1;
+    var has = shop.some(function (r) {
+      return special ? norm_(r.deliveredHow) === x[3] : norm_(r.item) === norm_(x[0]);
+    });
+    if (!has) appendObj_(TABS.shop, { item: x[0], cost: x[1], stock: '', active: false, description: x[2], deliveredHow: x[3] });
+  });
+  [['Gift_Weekly_Limit', '25', 'Gifts: most points one player can send per week (Monday 00:00 UTC). 0 = gifts off'],
+    ['Sponsor_Max', '50', 'Sponsor this bounty: most points in one sponsorship'],
+    ['Duel_Max_Stake', '25', 'Bounty duel: most points each player can stake']].forEach(function (s) {
+    if (!findRow_(TABS.settings, 'key', s[0])) appendObj_(TABS.settings, { key: s[0], value: s[1], meaning: s[2] });
+  });
 }
 
 function header_(sh, cols, color) {
