@@ -77,6 +77,26 @@ function rolePing(kind, settings, { bounty, grand = 0, player } = {}) {
   return { content: `<@&${id}> ${text}`, allowedMentions: { parse: [], roles: [id] } };
 }
 
+/** DM after reacting on the role message. */
+function roleGivenText(name, settings) {
+  return `🎯 **Welcome to the hunt, ${name}!** You now have the **Bounty Hunter** role, so you'll be pinged whenever a new bounty goes up. Good luck out there. 🏹\n` +
+    `-# Changed your mind? Remove your ${settings.roleEmoji} reaction and the role goes away.`;
+}
+
+const ROLE_ALREADY = [
+  "😏 Easy there, hunter. You're **already** a Bounty Hunter. One badge per hunter!",
+  '🎯 Bullseye… again? You already have the **Bounty Hunter** role. Save some arrows for the bosses!',
+  "🕵️ Our records show you're already on the hunter list. No double-dipping on roles!",
+  "🏹 You can't be *more* of a Bounty Hunter than you already are. Trust us, we checked.",
+  '📜 The guild clerk sighs and points at your name. Already signed up, hunter!'
+];
+/** DM when someone who already has the role reacts. `rand` in [0, 1). */
+const roleAlreadyText = rand => ROLE_ALREADY[Math.min(ROLE_ALREADY.length - 1, Math.floor(rand * ROLE_ALREADY.length))];
+
+/** DM after removing the reaction. */
+const roleRemovedText = settings =>
+  `🫡 **Bounty Hunter role removed.** The board will miss you. React ${settings.roleEmoji} again any time to rejoin the hunt.`;
+
 /**
  * A CLOSED bounty post, short: who claimed first, any big prize, and who claimed it.
  * `oneLine` (older posts): the names on one line, without points.
@@ -581,7 +601,7 @@ function prizeAdminEmbed({ what, player, playerId, amount }) {
 }
 
 module.exports = {
-  grandWinEmbed, drawEmbed, prizeAdminEmbed, closedBoardEmbed, rolePing,
+  grandWinEmbed, drawEmbed, prizeAdminEmbed, closedBoardEmbed, rolePing, roleGivenText, roleAlreadyText, roleRemovedText, ROLE_ALREADY,
   ts, weekLabel, shownWeek, bountyView, boardEmbed, progressEmbed, claimEmbed, multiplierEmbed, newBountyEmbed,
   table, leaderboardEmbed, monthlyWinnersEmbed, meEmbed, shopEmbed, confirmBuyEmbed, confirmPickEmbed, pickAdminEmbed, adminPurchaseEmbed, pastEmbed,
   wheelOddsText, spinFrameEmbed, adminLogEmbed, helpEmbed, GUIDE_TITLE,

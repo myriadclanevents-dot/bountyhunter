@@ -116,3 +116,13 @@ channels. Players' own messages are never touched.
 The ping is a line above the post. When a bounty closes, the bot removes that line
 from its post (editing never pings again). The role must be mentionable, or the bot
 needs "Mention @everyone, @here and All Roles" in the board/awards channel.
+
+## Self-service role
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `Role_Message` | empty | Link to a message (right-click → Copy Message Link). Reacting on it with `Role_Emoji` gives the `Bounty_Ping_Role_ID` role; removing the reaction takes it away. Any message works, e.g. the clan announcement. |
+| `Role_Emoji` | 🎯 | The emoji to react with. The bot adds it to the message itself, so players only click it. |
+
+The bot needs the **Manage Roles** permission, and its own highest role must be above
+the Bounty Hunter role. The role message is never removed by the channel cleanup.

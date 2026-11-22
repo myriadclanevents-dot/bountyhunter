@@ -89,6 +89,10 @@ function readSettings(raw = {}) {
     pingRoleId: (str(raw.Bounty_Ping_Role_ID).match(/\d{5,}/) || [''])[0],
     pingOnMultiplier: /^(true|yes|1|x|✓|✔)$/i.test(str(raw.Ping_On_Multiplier)),
     pingOnFirstClaim: /^(true|yes|1|x|✓|✔)$/i.test(str(raw.Ping_On_First_Claim)),
+    // Self-service role: react with Role_Emoji on Role_Message (a message link) to get Bounty_Ping_Role_ID.
+    roleMessageId: messageIdFrom(raw.Role_Message) || '',
+    roleChannelId: (/channels\/\d+\/(\d{15,22})\/\d{15,22}/.exec(str(raw.Role_Message)) || [])[1] || '',
+    roleEmoji: str(raw.Role_Emoji) || '🎯',
     // Tidy channels (days, 0 = off): small bot messages, closed bounty posts one-line / deleted.
     cleanupDays: Math.max(0, num(raw.Cleanup_After_Days, 7)),
     bountyCompactDays: Math.max(0, num(raw.Bounty_Compact_After_Days, 14)),

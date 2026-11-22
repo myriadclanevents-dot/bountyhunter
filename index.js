@@ -232,7 +232,7 @@ async function cleanupChannels() {
   cleaning = true;
   try {
     const ids = [...new Set([s.boardChannelId, s.awardsChannelId, s.submissionsChannelId, s.wheelChannelId].filter(Boolean))];
-    const keepIds = new Set(sheet.getBounties().map(x => x.messageId).filter(Boolean));
+    const keepIds = new Set([...sheet.getBounties().map(x => x.messageId), s.roleMessageId].filter(Boolean));
     const t = now();
     const stopAt = t - (s.cleanupDays + 60) * b.DAY; // older than this was cleaned long ago
     let deleted = 0;
@@ -564,12 +564,81 @@ async function handleDelivered(message, user) {
 // Reactions
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Self-service role: react on the Role_Message to get the Bounty Hunter role
+// ---------------------------------------------------------------------------
+
+const isRoleReaction = (message, reaction, s) =>
+  Boolean(s.roleMessageId && s.pingRoleId && message.id === s.roleMessageId && sameEmoji(reaction.emoji, s.roleEmoji));
+
+/**
+ * Tells the player what happened: a DM, or (DMs closed) a short reply under the
+ * role message that deletes itself after 20 seconds.
+ */
+async function tellPlayer(message, user, text) {
+  const sent = await user.send({ content: text, allowedMentions: NO_PINGS }).then(() => true).catch(() => false);
+  if (sent) return;
+  const reply = await message.channel.send({ content: `<@${user.id}> ${text}`, allowedMentions: { users: [user.id] } }).catch(() => null);
+  if (reply) setTimeout(() => reply.delete().catch(() => {}), 20 * 1000);
+}
+
+/** Gives (on = true) or takes away the Bounty_Ping_Role_ID role and tells the player. Needs "Manage Roles". */
+async function setHunterRole(message, user, on) {
+  const roleId = S().pingRoleId;
+  try {
+    const member = await message.guild.members.fetch(user.id);
+    const has = member.roles.cache.has(roleId);
+    if (on && has) { await tellPlayer(message, user, e.roleAlreadyText(Math.random())); return; }
+    if (!on && !has) return;
+    if (on) await member.roles.add(roleId, 'Reacted on the Bounty Hunter role message');
+    else await member.roles.remove(roleId, 'Removed their reaction on the Bounty Hunter role message');
+    console.log(`🎭 ${on ? 'Gave' : 'Removed'} the Bounty Hunter role ${on ? 'to' : 'from'} ${member.displayName}.`);
+    await tellPlayer(message, user, on ? e.roleGivenText(member.displayName, S()) : e.roleRemovedText(S()));
+  } catch (err) {
+    console.error(`⚠️ Could not ${on ? 'give' : 'remove'} the Bounty Hunter role (needs Manage Roles, bot role above it): ${err.message}`);
+  }
+}
+
+/** Makes sure the role message carries the bot's own reaction, so players only have to click it. */
+let roleReactionDone = '';
+async function ensureRoleReaction() {
+  const s = S();
+  const key = `${s.roleChannelId}/${s.roleMessageId}/${s.roleEmoji}/${s.pingRoleId}`;
+  if (!s.roleMessageId || !s.pingRoleId || key === roleReactionDone) return;
+  try {
+    const channel = await fetchChannel(s.roleChannelId || s.boardChannelId);
+    const msg = await channel?.messages.fetch(s.roleMessageId);
+    if (!msg) throw new Error('message not found (paste the full message link in Role_Message)');
+    const mine = msg.reactions.cache.find(r => sameEmoji(r.emoji, s.roleEmoji));
+    if (!mine?.me) await msg.react(s.roleEmoji);
+    roleReactionDone = key;
+    console.log(`🎭 Role message ready: react ${s.roleEmoji} to get the Bounty Hunter role.`);
+  } catch (err) {
+    console.error(`⚠️ Role message: ${err.message}`);
+    roleReactionDone = key; // don't retry every 5 minutes; /bhreload or a Settings change tries again
+  }
+}
+
+client.on(Events.MessageReactionRemove, async (reaction, user) => {
+  try {
+    if (user.bot) return;
+    const s = S();
+    if (!s.roleMessageId) return;
+    if (reaction.partial) await reaction.fetch().catch(() => {});
+    const message = reaction.message.partial ? await reaction.message.fetch() : reaction.message;
+    if (isRoleReaction(message, reaction, s)) await setHunterRole(message, user, false);
+  } catch (err) {
+    console.error(`❌ Reaction-remove handler failed: ${err.message}`);
+  }
+});
+
 client.on(Events.MessageReactionAdd, async (reaction, user) => {
   try {
     if (user.bot) return;
     const s = S();
     if (reaction.partial) await reaction.fetch();
     const message = reaction.message.partial ? await reaction.message.fetch() : reaction.message;
+    if (isRoleReaction(message, reaction, s)) { await setHunterRole(message, user, true); return; }
     const ch = message.channel;
     const inSubs = s.submissionsChannelId && (ch.id === s.submissionsChannelId || ch.parentId === s.submissionsChannelId);
     const inShop = s.shopAdminChannelId && ch.id === s.shopAdminChannelId;
@@ -760,7 +829,7 @@ const handlers = {
     await i.deferReply({ flags: MessageFlags.Ephemeral });
     const ok = await sheet.loadAll();
     lastRendered.clear();
-    if (ok) { lastGuide = ''; await ensureGuide(); await refreshBoards(); }
+    if (ok) { lastGuide = ''; roleReactionDone = ''; await ensureGuide(); await ensureRoleReaction(); await refreshBoards(); }
     const warns = sheet.warnings();
     return i.editReply({ content: ok
       ? `✅ Sheet re-read. ${b.usablePool(sheet.getPool()).length} bounties to pick from, ${sheet.getShop().length} shop items.${warns.length ? `\n⚠️ ${warns.slice(0, 5).join('\n⚠️ ')}` : ''}`
@@ -1505,11 +1574,12 @@ client.once(Events.ClientReady, async () => {
   }
 
   await ensureGuide();
+  await ensureRoleReaction();
   await refreshBoards();
   setInterval(tick, 60 * 1000);
   tick();
   setInterval(() => ensureCommands({ quiet: true }), 5 * 60 * 1000);
-  setInterval(async () => { if (await sheet.refreshConfig()) { await ensureGuide(); await refreshBoards(); } }, 5 * 60 * 1000);
+  setInterval(async () => { if (await sheet.refreshConfig()) { await ensureGuide(); await ensureRoleReaction(); await refreshBoards(); } }, 5 * 60 * 1000);
   setTimeout(cleanupChannels, 2 * 60 * 1000); // tidy old bot messages: soon after start, then every hour
   setInterval(cleanupChannels, 60 * 60 * 1000);
 });

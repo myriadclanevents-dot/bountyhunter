@@ -63,6 +63,28 @@ test('closed post: short, claim list; one line later', () => {
   assert.equal(grand.fields[0].value, '**200M GP** won by Diodegro');
 });
 
+test('role message: a message link gives channel + message, emoji defaults to 🎯', () => {
+  const s = b.readSettings({ Role_Message: 'https://discord.com/channels/111111111111111111/222222222222222222/333333333333333333' });
+  assert.equal(s.roleMessageId, '333333333333333333');
+  assert.equal(s.roleChannelId, '222222222222222222');
+  assert.equal(s.roleEmoji, '🎯');
+  const id = b.readSettings({ Role_Message: '333333333333333333', Role_Emoji: '🏹' });
+  assert.equal(id.roleMessageId, '333333333333333333');
+  assert.equal(id.roleChannelId, '');           // just an id: the bot looks in the board channel
+  assert.equal(id.roleEmoji, '🏹');
+  assert.equal(b.readSettings({}).roleMessageId, '');
+});
+
+test('role replies: welcome, funny "already", removed', () => {
+  const s = b.readSettings({});
+  assert.equal(e.roleGivenText('Ana', s).startsWith('🎯 **Welcome to the hunt, Ana!**'), true);
+  assert.equal(e.roleGivenText('Ana', s).includes('Remove your 🎯 reaction'), true);
+  assert.equal(e.roleAlreadyText(0), e.ROLE_ALREADY[0]);
+  assert.equal(e.roleAlreadyText(0.9999), e.ROLE_ALREADY[e.ROLE_ALREADY.length - 1]);
+  assert.equal(e.roleAlreadyText(1), e.ROLE_ALREADY[e.ROLE_ALREADY.length - 1]); // never undefined
+  assert.equal(e.roleRemovedText(s).includes('React 🎯 again'), true);
+});
+
 test('role pings: new bounty always (when a role is set), the others only when TRUE', () => {
   const R = '1407815148286251119';
   const bounty = { boss: 'Nex' };
