@@ -90,8 +90,10 @@ function readSettings(raw = {}) {
     pingOnMultiplier: /^(true|yes|1|x|✓|✔)$/i.test(str(raw.Ping_On_Multiplier)),
     pingOnFirstClaim: /^(true|yes|1|x|✓|✔)$/i.test(str(raw.Ping_On_First_Claim)),
     // Self-service role: react with Role_Emoji on Role_Message (a message link) to get Bounty_Ping_Role_ID.
-    roleMessageId: messageIdFrom(raw.Role_Message) || '',
-    roleChannelId: (/channels\/\d+\/(\d{15,22})\/\d{15,22}/.exec(str(raw.Role_Message)) || [])[1] || '',
+    // Several messages allowed: links (or ids) separated by commas / spaces / new lines.
+    roleMessages: roleMessagesFrom(raw.Role_Message),
+    roleMessageId: (roleMessagesFrom(raw.Role_Message)[0] || {}).messageId || '',
+    roleChannelId: (roleMessagesFrom(raw.Role_Message)[0] || {}).channelId || '',
     roleEmoji: str(raw.Role_Emoji) || '🎯',
     // Tidy channels (days, 0 = off): small bot messages, closed bounty posts one-line / deleted.
     cleanupDays: Math.max(0, num(raw.Cleanup_After_Days, 7)),
@@ -741,6 +743,17 @@ function spinPlan(count, winner, rand = Math.random) {
 // ---------------------------------------------------------------------------
 
 /** Message id from a Discord message link or a bare id. */
+/** Role_Message cell → [{ channelId ('' = board channel), messageId }], duplicates removed. */
+function roleMessagesFrom(text) {
+  const out = [];
+  for (const part of str(text).split(/[\s,;]+/).filter(Boolean)) {
+    const link = /channels\/\d+\/(\d{15,22})\/(\d{15,22})/.exec(part);
+    const m = link ? { channelId: link[1], messageId: link[2] } : /^\d{15,22}$/.test(part) ? { channelId: '', messageId: part } : null;
+    if (m && !out.some(x => x.messageId === m.messageId)) out.push(m);
+  }
+  return out;
+}
+
 function messageIdFrom(text) {
   const t = str(text);
   const link = /channels\/\d+\/\d+\/(\d{15,22})/.exec(t);

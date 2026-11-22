@@ -73,6 +73,14 @@ test('role message: a message link gives channel + message, emoji defaults to ðŸ
   assert.equal(id.roleChannelId, '');           // just an id: the bot looks in the board channel
   assert.equal(id.roleEmoji, 'ðŸ¹');
   assert.equal(b.readSettings({}).roleMessageId, '');
+  const two = b.readSettings({ Role_Message: 'https://discord.com/channels/111111111111111111/222222222222222222/333333333333333333, 444444444444444444\nhttps://discord.com/channels/111111111111111111/555555555555555555/666666666666666666 444444444444444444' });
+  assert.deepEqual(two.roleMessages, [
+    { channelId: '222222222222222222', messageId: '333333333333333333' },
+    { channelId: '', messageId: '444444444444444444' },
+    { channelId: '555555555555555555', messageId: '666666666666666666' }
+  ]);
+  assert.equal(two.roleMessageId, '333333333333333333');
+  assert.deepEqual(b.readSettings({}).roleMessages, []);
 });
 
 test('role replies: welcome, funny "already", removed', () => {

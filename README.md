@@ -121,7 +121,7 @@ needs "Mention @everyone, @here and All Roles" in the board/awards channel.
 
 | Setting | Default | Meaning |
 |---|---|---|
-| `Role_Message` | empty | Link to a message (right-click → Copy Message Link). Reacting on it with `Role_Emoji` gives the `Bounty_Ping_Role_ID` role; removing the reaction takes it away. Any message works, e.g. the clan announcement. |
+| `Role_Message` | empty | Link to a message (right-click → Copy Message Link). Reacting on it with `Role_Emoji` gives the `Bounty_Ping_Role_ID` role; removing the reaction takes it away. Any message works, e.g. the clan announcement. Several messages: put the links in the same cell separated by commas (or spaces / new lines); someone who reacted on two keeps the role until both reactions are gone. |
 | `Role_Emoji` | 🎯 | The emoji to react with. The bot adds it to the message itself, so players only click it. |
 
 The bot needs the **Manage Roles** permission, and its own highest role must be above

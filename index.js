@@ -232,7 +232,7 @@ async function cleanupChannels() {
   cleaning = true;
   try {
     const ids = [...new Set([s.boardChannelId, s.awardsChannelId, s.submissionsChannelId, s.wheelChannelId].filter(Boolean))];
-    const keepIds = new Set([...sheet.getBounties().map(x => x.messageId), s.roleMessageId].filter(Boolean));
+    const keepIds = new Set([...sheet.getBounties().map(x => x.messageId), ...s.roleMessages.map(r => r.messageId)].filter(Boolean));
     const t = now();
     const stopAt = t - (s.cleanupDays + 60) * b.DAY; // older than this was cleaned long ago
     let deleted = 0;
@@ -569,7 +569,7 @@ async function handleDelivered(message, user) {
 // ---------------------------------------------------------------------------
 
 const isRoleReaction = (message, reaction, s) =>
-  Boolean(s.roleMessageId && s.pingRoleId && message.id === s.roleMessageId && sameEmoji(reaction.emoji, s.roleEmoji));
+  Boolean(s.pingRoleId && s.roleMessages.some(r => r.messageId === message.id) && sameEmoji(reaction.emoji, s.roleEmoji));
 
 /**
  * Tells the player what happened: a DM, or (DMs closed) a short reply under the
@@ -599,34 +599,50 @@ async function setHunterRole(message, user, on) {
   }
 }
 
-/** Makes sure the role message carries the bot's own reaction, so players only have to click it. */
+/** Makes sure every role message carries the bot's own reaction, so players only have to click it. */
 let roleReactionDone = '';
 async function ensureRoleReaction() {
   const s = S();
-  const key = `${s.roleChannelId}/${s.roleMessageId}/${s.roleEmoji}/${s.pingRoleId}`;
-  if (!s.roleMessageId || !s.pingRoleId || key === roleReactionDone) return;
-  try {
-    const channel = await fetchChannel(s.roleChannelId || s.boardChannelId);
-    const msg = await channel?.messages.fetch(s.roleMessageId);
-    if (!msg) throw new Error('message not found (paste the full message link in Role_Message)');
-    const mine = msg.reactions.cache.find(r => sameEmoji(r.emoji, s.roleEmoji));
-    if (!mine?.me) await msg.react(s.roleEmoji);
-    roleReactionDone = key;
-    console.log(`🎭 Role message ready: react ${s.roleEmoji} to get the Bounty Hunter role.`);
-  } catch (err) {
-    console.error(`⚠️ Role message: ${err.message}`);
-    roleReactionDone = key; // don't retry every 5 minutes; /bhreload or a Settings change tries again
+  const key = `${JSON.stringify(s.roleMessages)}/${s.roleEmoji}/${s.pingRoleId}`;
+  if (!s.roleMessages.length || !s.pingRoleId || key === roleReactionDone) return;
+  roleReactionDone = key; // don't retry every 5 minutes; /bhreload or a Settings change tries again
+  for (const [n, r] of s.roleMessages.entries()) {
+    const label = s.roleMessages.length > 1 ? ` ${n + 1}` : '';
+    try {
+      const channel = await fetchChannel(r.channelId || s.boardChannelId);
+      const msg = await channel?.messages.fetch(r.messageId);
+      if (!msg) throw new Error('message not found (paste the full message link in Role_Message)');
+      const mine = msg.reactions.cache.find(x => sameEmoji(x.emoji, s.roleEmoji));
+      if (!mine?.me) await msg.react(s.roleEmoji);
+      console.log(`🎭 Role message${label} ready: react ${s.roleEmoji} to get the Bounty Hunter role.`);
+    } catch (err) {
+      console.error(`⚠️ Role message${label}: ${err.message}`);
+    }
   }
+}
+
+/** True if the player still has the role emoji on ANOTHER role message (then removing one keeps the role). */
+async function stillReactedElsewhere(messageId, userId, s) {
+  for (const r of s.roleMessages) {
+    if (r.messageId === messageId) continue;
+    try {
+      const channel = await fetchChannel(r.channelId || s.boardChannelId);
+      const msg = await channel?.messages.fetch(r.messageId);
+      const re = msg?.reactions.cache.find(x => sameEmoji(x.emoji, s.roleEmoji));
+      if (re && (await re.users.fetch({ limit: 100 })).has(userId)) return true;
+    } catch { /* message gone: ignore */ }
+  }
+  return false;
 }
 
 client.on(Events.MessageReactionRemove, async (reaction, user) => {
   try {
     if (user.bot) return;
     const s = S();
-    if (!s.roleMessageId) return;
+    if (!s.roleMessages.length) return;
     if (reaction.partial) await reaction.fetch().catch(() => {});
     const message = reaction.message.partial ? await reaction.message.fetch() : reaction.message;
-    if (isRoleReaction(message, reaction, s)) await setHunterRole(message, user, false);
+    if (isRoleReaction(message, reaction, s) && !(await stillReactedElsewhere(message.id, user.id, s))) await setHunterRole(message, user, false);
   } catch (err) {
     console.error(`❌ Reaction-remove handler failed: ${err.message}`);
   }
