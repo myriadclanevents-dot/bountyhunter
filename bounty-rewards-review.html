@@ -119,7 +119,6 @@ details ul{color:var(--ink-2);font-size:.9rem;padding-left:18px;margin:0;display
       <li>Prize wheel: spin 30 points, big GP prizes only</li>
     </ul></div>
     <div class="st"><span class="pill bad">Still open</span><ul>
-      <li>Two shop items say "Dye of choice"</li>
       <li>One bounty is close to impossible (Legiones)</li>
     </ul></div>
   </div>
@@ -222,7 +221,7 @@ details ul{color:var(--ink-2);font-size:.9rem;padding-left:18px;margin:0;display
 
 <section id="decide">
   <span class="eyebrow">Open items</span>
-  <h2>Two clean-ups left</h2>
+  <h2>One clean-up left</h2>
   <div class="st" style="background:var(--good-soft);border-color:transparent">
     <span class="pill good">Done 22 Nov</span>
     <ul>
@@ -231,26 +230,18 @@ details ul{color:var(--ink-2);font-size:.9rem;padding-left:18px;margin:0;display
       <li><b>Flatter points scale:</b> 20/15, 30/20, 45/25, 70/35 (was 8/3, 20/8, 45/18, 100/40).</li>
       <li><b>Admins choose the Grand Bounties:</b> tick box in the Bounties tab's <code>Grand Bounty</code> column. Only ticked bounties count. Today: Telos and Zamorak.</li>
       <li><b>Prize wheel:</b> spin 30 points; Nothing 45, +20 points back 40, 50M 11, 100M 3, 200M 1. About 480k per point.</li>
+      <li><b>Shop items renamed:</b> "Pernix's quiver in color of choice" and "Grasping rune pouch in color of choice" (were "& Dye of choice").</li>
     </ul>
   </div>
   <div class="decide">
     <div class="dq">
       <span class="qn">1</span>
-      <h3>Rename the two "Dye of choice" shop items?</h3>
-      <p>"Pernix's quiver & Dye of choice" and "Grasping rune pouch & Dye of choice" cost 115 points (~58M). A player could pick a Third Age or Blood dye, worth billions.</p>
-      <div>
-        <p class="rec"><b>Recommended: yes</b>, rename to "… & ordinary dye" (or list the allowed colours).</p>
-        <div class="answer"><span class="yes">Rename</span><span>Remove them</span><span>Leave as is</span></div>
-        <p class="how-to">Shop tab → Item column. The bot picks it up within 5 minutes.</p>
-      </div>
-    </div>
-    <div class="dq">
-      <span class="qn">2</span>
       <h3>Replace the Legiones grips bounty?</h3>
       <p>Ascension grips are 1 in 2,056 and only drop on a Slayer task: roughly 100 hours. Nobody will finish it in a week.</p>
       <div>
         <p class="rec"><b>Recommended: replace</b> with "any Ascension signet". While editing: write the enrage into Telos, Ghrazi and Zamorak, and "on Slayer task" into Profane Scabarite.</p>
         <div class="answer"><span class="yes">Replace</span><span>Keep, set Active = FALSE</span><span>Keep as is</span></div>
+        <p class="how-to">Status 22 Nov: kept in the list for now, still to decide.</p>
         <p class="how-to">Bounties tab. For new tiers: update the Difficulty tab, then run <code>applyDifficultyToBounties</code>.</p>
       </div>
     </div>
@@ -295,7 +286,7 @@ const B=[
  ["Arch-Glacor","Arch-Glacor","Frozen core, Scripture of Wen or Leng artefact",83,15,1],
  ["Gate of Elidinis","Gate_of_Elidinis","Memory dowser or Runic attuner",240,20,0],
  ["Profane Scabarite","Profane_Scabarite","Spectral lens",512,60,1,"Say: on Slayer task"],
- ["Legiones","Ascension_grips","Ascension grips",2056,20,2,"Replace (clean-up 2)"],
+ ["Legiones","Ascension_grips","Ascension grips",2056,20,2,"Replace (clean-up 1)"],
  ["Zuk","TzKal-Zuk","Scripture of Ful or Magma Tempest codex",50,5,2],
  ["Nex","Nex","1 Torva + 1 Pernix + 1 Virtus piece",129,20,2],
  ["Croesus","Croesus","Any of 9 uniques",50,9,0],
