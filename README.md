@@ -104,3 +104,15 @@ A closed bounty post is always short: who claimed first, any Grand Bounty / spon
 result, and "Claimed by (n)". The cleanup runs 2 minutes after start and then every
 hour, looking at the newest 500 messages of the board, awards, submissions and wheel
 channels. Players' own messages are never touched.
+
+## Role pings
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `Bounty_Ping_Role_ID` | empty | Role pinged when a new bounty goes up (Grand Bounties say so in the ping). Empty = no pings at all. Right-click the role → Copy Role ID. |
+| `Ping_On_Multiplier` | FALSE | TRUE = also ping the role when the ×multiplier switches on. |
+| `Ping_On_First_Claim` | FALSE | TRUE = also ping the role when someone claims the bounty first. |
+
+The ping is a line above the post. When a bounty closes, the bot removes that line
+from its post (editing never pings again). The role must be mentionable, or the bot
+needs "Mention @everyone, @here and All Roles" in the board/awards channel.

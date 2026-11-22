@@ -85,6 +85,10 @@ function readSettings(raw = {}) {
     // Monthly draw (M GP, paid in game): 1 ticket per claim. 0 = off.
     drawPrize: Math.max(0, num(raw.Monthly_Draw_Prize, 100)),
     drawSince: num(raw.Monthly_Draw_Since, null), // written by the bot on first start
+    // Role pings: a new bounty always pings Bounty_Ping_Role_ID (if set); the two others only when TRUE.
+    pingRoleId: (str(raw.Bounty_Ping_Role_ID).match(/\d{5,}/) || [''])[0],
+    pingOnMultiplier: /^(true|yes|1|x|✓|✔)$/i.test(str(raw.Ping_On_Multiplier)),
+    pingOnFirstClaim: /^(true|yes|1|x|✓|✔)$/i.test(str(raw.Ping_On_First_Claim)),
     // Tidy channels (days, 0 = off): small bot messages, closed bounty posts one-line / deleted.
     cleanupDays: Math.max(0, num(raw.Cleanup_After_Days, 7)),
     bountyCompactDays: Math.max(0, num(raw.Bounty_Compact_After_Days, 14)),

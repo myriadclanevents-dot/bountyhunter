@@ -60,6 +60,24 @@ function codeWordField(bounty) {
 }
 
 /**
+ * The role ping line above a post, or {} when no ping role is set.
+ * kind: 'new' (always), 'multiplier' / 'first' (only when their setting is TRUE).
+ */
+function rolePing(kind, settings, { bounty, grand = 0, player } = {}) {
+  const id = settings.pingRoleId;
+  if (!id) return {};
+  if (kind === 'multiplier' && !settings.pingOnMultiplier) return {};
+  if (kind === 'first' && !settings.pingOnFirstClaim) return {};
+  const boss = bounty?.boss || 'the bounty';
+  const text = kind === 'new'
+    ? (grand > 0 ? `🏆 A new **GRAND BOUNTY** is up: **${boss}** · ${grand}M GP!` : `🎯 A new bounty is up: **${boss}**!`)
+    : kind === 'multiplier'
+      ? `🔥 Nobody has claimed **${boss}** yet. The first claim is now worth **×${String(settings.multiplier).replace('.', ',')}**!`
+      : `🥇 **${player}** claimed the **${boss}** bounty first! Later claims still pay.`;
+  return { content: `<@&${id}> ${text}`, allowedMentions: { parse: [], roles: [id] } };
+}
+
+/**
  * A CLOSED bounty post, short: who claimed first, any big prize, and who claimed it.
  * `oneLine` (older posts): the names on one line, without points.
  */
@@ -563,7 +581,7 @@ function prizeAdminEmbed({ what, player, playerId, amount }) {
 }
 
 module.exports = {
-  grandWinEmbed, drawEmbed, prizeAdminEmbed, closedBoardEmbed,
+  grandWinEmbed, drawEmbed, prizeAdminEmbed, closedBoardEmbed, rolePing,
   ts, weekLabel, shownWeek, bountyView, boardEmbed, progressEmbed, claimEmbed, multiplierEmbed, newBountyEmbed,
   table, leaderboardEmbed, monthlyWinnersEmbed, meEmbed, shopEmbed, confirmBuyEmbed, confirmPickEmbed, pickAdminEmbed, adminPurchaseEmbed, pastEmbed,
   wheelOddsText, spinFrameEmbed, adminLogEmbed, helpEmbed, GUIDE_TITLE,

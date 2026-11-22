@@ -63,4 +63,22 @@ test('closed post: short, claim list; one line later', () => {
   assert.equal(grand.fields[0].value, '**200M GP** won by Diodegro');
 });
 
+test('role pings: new bounty always (when a role is set), the others only when TRUE', () => {
+  const R = '1407815148286251119';
+  const bounty = { boss: 'Nex' };
+  assert.deepEqual(e.rolePing('new', S, { bounty }), {});                       // no role set: no ping
+  const on = b.readSettings({ Bounty_Ping_Role_ID: R, Multiplier: '1,5' });
+  assert.equal(on.pingRoleId, R);
+  assert.equal(b.readSettings({ Bounty_Ping_Role_ID: '<@&' + R + '>' }).pingRoleId, R); // pasted as a mention
+  const n = e.rolePing('new', on, { bounty });
+  assert.equal(n.content, '<@&' + R + '> 🎯 A new bounty is up: **Nex**!');
+  assert.deepEqual(n.allowedMentions, { parse: [], roles: [R] });
+  assert.equal(e.rolePing('new', on, { bounty, grand: 200 }).content.includes('GRAND BOUNTY** is up: **Nex** · 200M GP'), true);
+  assert.deepEqual(e.rolePing('multiplier', on, { bounty }), {});               // off by default
+  assert.deepEqual(e.rolePing('first', on, { bounty, player: 'Ana' }), {});
+  const all = b.readSettings({ Bounty_Ping_Role_ID: R, Multiplier: '1,5', Ping_On_Multiplier: 'TRUE', Ping_On_First_Claim: 'TRUE' });
+  assert.match(e.rolePing('multiplier', all, { bounty }).content, /×1,5/);
+  assert.equal(e.rolePing('first', all, { bounty, player: 'Ana' }).content.includes('**Ana** claimed the **Nex** bounty first'), true);
+});
+
 console.log(`cleanup: ${passed} tests passed`);

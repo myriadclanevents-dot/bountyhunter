@@ -293,7 +293,8 @@ async function refreshBoards() {
     if (lastRendered.get(bounty.messageId) === key) continue;
     try {
       const msg = await channel.messages.fetch(bounty.messageId);
-      await msg.edit({ embeds: [embed] });
+      // A closed post drops its "@role new bounty is up" line (editing never pings again).
+      await msg.edit({ embeds: [embed], ...(stage !== 'open' && msg.content ? { content: '' } : {}) });
       lastRendered.set(bounty.messageId, key);
     } catch (err) {
       if (err.code === 10008 && open.includes(bounty)) { // post was deleted: put it back (same post time)
@@ -360,7 +361,7 @@ async function postBounty(bounty, source = '') {
   }
   const grand = grandFor(draft, postedAt);
   const view = e.bountyView(draft, { claims: [], inProgress: 0, settings: s, now: postedAt, closed: false, grand });
-  const msg = await channel.send({ embeds: [e.boardEmbed(draft, view, s, links())] });
+  const msg = await channel.send({ embeds: [e.boardEmbed(draft, view, s, links())], ...e.rolePing('new', s, { bounty: draft, grand }) });
   await msg.pin().catch(err => console.error(`⚠️ Could not pin the bounty (needs Pin Messages permission): ${err.message}`));
   await sheet.markPosted(bounty, postedAt, msg.id, draft.codeWord);
   if (boughtWord) await sheet.setSetting('Next_Code_Word', '');
@@ -477,7 +478,7 @@ async function awardClaim(bounty, { player, playerId, completedAt, approver, mes
   const balance = b.balances(all, playerId, now());
   const rank = b.rankOf(b.standings(all, b.monthRange(now())), playerId);
   const awards = await fetchChannel(s.awardsChannelId);
-  await awards?.send({ embeds: [e.claimEmbed({ player, points, isFirst, multiplied, bounty, settings: s, claimNumber, balance, rank })] })
+  await awards?.send({ embeds: [e.claimEmbed({ player, points, isFirst, multiplied, bounty, settings: s, claimNumber, balance, rank })], ...(isFirst ? e.rolePing('first', s, { bounty, player }) : {}) })
     .catch(err => console.error(`⚠️ Could not post in awards: ${err.message}`));
   if (isFirst) await awardGrand(bounty, { player, playerId });
   await settleExtras();
@@ -1422,7 +1423,7 @@ async function checkMultiplier(t) {
   multiplierAnnounced.add(bounty.weekOf);
   const view = viewFor(bounty, t);
   const awards = await fetchChannel(s.awardsChannelId);
-  await awards?.send({ embeds: [e.multiplierEmbed(bounty, s, view.firstNow, links())] }).catch(() => {});
+  await awards?.send({ embeds: [e.multiplierEmbed(bounty, s, view.firstNow, links())], ...e.rolePing('multiplier', s, { bounty }) }).catch(() => {});
   await refreshBoards();
 }
 
