@@ -100,6 +100,10 @@ const reply = (message, content) => message.reply({ content, allowedMentions: NO
 // Slash commands
 // ---------------------------------------------------------------------------
 
+// Admin commands are hidden from members without "Manage Server". Server settings →
+// Integrations overrides don't last: event bots re-create our commands (new ids) and
+// per-command overrides are lost. The bot still checks isAdmin() on every use.
+const ADMIN_ONLY = PermissionFlagsBits.ManageGuild;
 const commands = [
   new SlashCommandBuilder().setName('bhbounty').setDescription("This week's bounty and your progress"),
   new SlashCommandBuilder().setName('bhme').setDescription('Your wallet, points earned and rank')
@@ -110,15 +114,15 @@ const commands = [
   new SlashCommandBuilder().setName('bhshop').setDescription('What you can buy with bounty points'),
   new SlashCommandBuilder().setName('bhbuy').setDescription('Spend bounty points in the shop'),
   new SlashCommandBuilder().setName('bhpast').setDescription('Earlier bounties and who claimed them first'),
-  new SlashCommandBuilder().setName('bhvoid').setDescription('ADMIN: undo an approved bounty submission')
+  new SlashCommandBuilder().setName('bhvoid').setDescription('ADMIN: undo an approved bounty submission').setDefaultMemberPermissions(ADMIN_ONLY)
     .addStringOption(o => o.setName('message').setDescription('Link (or ID) of the submission message').setRequired(true))
     .addStringOption(o => o.setName('reason').setDescription('Why it is undone (shown in the admin log)').setRequired(true).setMaxLength(200)),
-  new SlashCommandBuilder().setName('bhgive').setDescription('ADMIN: add or remove points by hand')
+  new SlashCommandBuilder().setName('bhgive').setDescription('ADMIN: add or remove points by hand').setDefaultMemberPermissions(ADMIN_ONLY)
     .addUserOption(o => o.setName('player').setDescription('Who').setRequired(true))
     .addIntegerOption(o => o.setName('amount').setDescription('Points (negative to remove)').setRequired(true).setMinValue(-1000).setMaxValue(1000))
     .addStringOption(o => o.setName('reason').setDescription('Shown in the Points tab').setRequired(true)),
-  new SlashCommandBuilder().setName('bhpost').setDescription('ADMIN: post a bounty now (next Monday\'s bounty still comes as normal)'),
-  new SlashCommandBuilder().setName('bhreload').setDescription('ADMIN: re-read the Google Sheet and refresh the bounty post'),
+  new SlashCommandBuilder().setName('bhpost').setDescription('ADMIN: post a bounty now (next Monday\'s bounty still comes as normal)').setDefaultMemberPermissions(ADMIN_ONLY),
+  new SlashCommandBuilder().setName('bhreload').setDescription('ADMIN: re-read the Google Sheet and refresh the bounty post').setDefaultMemberPermissions(ADMIN_ONLY),
   new SlashCommandBuilder().setName('bhhelp').setDescription('How Bounty Hunter works and all its commands')
 ].map(c => c.toJSON());
 
@@ -139,7 +143,8 @@ async function ensureCommands({ quiet = false } = {}) {
     let changed = 0;
     for (const cmd of commands) {
       const have = existing.find(c => c.name === cmd.name);
-      if (have && have.description === cmd.description && optShape(have.options) === optShape(cmd.options)) { commandIds[cmd.name] = have.id; continue; }
+      const samePerms = String(have?.default_member_permissions ?? '') === String(cmd.default_member_permissions ?? '');
+      if (have && samePerms && have.description === cmd.description && optShape(have.options) === optShape(cmd.options)) { commandIds[cmd.name] = have.id; continue; }
       const made = await rest.post(route, { body: cmd });
       commandIds[cmd.name] = made.id;
       changed++;
