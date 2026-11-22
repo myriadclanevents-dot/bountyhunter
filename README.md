@@ -91,3 +91,16 @@ at the same time as them.
 
 ### Updating the Apps Script later
 Deploy → Manage deployments → ✏️ → Version: **New version** → Deploy (same URL).
+
+## Tidy channels
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `Cleanup_After_Days` | 7 | The bot deletes its own small messages (claim announcements, ×multiplier alerts, gift notes, duels, wheel spins, replies) after this many days. Pinned messages, bounty posts, Grand Bounty wins, monthly draws, monthly top 3 and clan goals stay. `0` = off. |
+| `Bounty_Compact_After_Days` | 14 | Days after a bounty closes until its post shows the claimers on one line. `0` = never. |
+| `Bounty_Delete_After_Days` | 30 | Days after a bounty closes until its post is deleted (`/bhpast` still shows it). `0` = never. |
+
+A closed bounty post is always short: who claimed first, any Grand Bounty / sponsor
+result, and "Claimed by (n)". The cleanup runs 2 minutes after start and then every
+hour, looking at the newest 500 messages of the board, awards, submissions and wheel
+channels. Players' own messages are never touched.

@@ -84,7 +84,11 @@ function readSettings(raw = {}) {
     grandSince: num(raw.Grand_Bounty_Since, null), // written by the bot on first start
     // Monthly draw (M GP, paid in game): 1 ticket per claim. 0 = off.
     drawPrize: Math.max(0, num(raw.Monthly_Draw_Prize, 100)),
-    drawSince: num(raw.Monthly_Draw_Since, null) // written by the bot on first start
+    drawSince: num(raw.Monthly_Draw_Since, null), // written by the bot on first start
+    // Tidy channels (days, 0 = off): small bot messages, closed bounty posts one-line / deleted.
+    cleanupDays: Math.max(0, num(raw.Cleanup_After_Days, 7)),
+    bountyCompactDays: Math.max(0, num(raw.Bounty_Compact_After_Days, 14)),
+    bountyDeleteDays: Math.max(0, num(raw.Bounty_Delete_After_Days, 30))
   };
 }
 

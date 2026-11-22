@@ -20,6 +20,7 @@ const b = require('./bounty');
 const e = require('./embeds');
 const x = require('./extras');
 const pz = require('./prizes');
+const cl = require('./cleanup');
 const { MESSAGE_MAX, NOTE_MAX, donateModal, giftModal, sponsorModal, duelModal, wordModal, emojiModal } = require('./donations');
 const { parseSubmission, buildMatcher, findItem } = require('./matching');
 
@@ -217,20 +218,77 @@ async function ensureGuide() {
   }
 }
 
+const goneBoards = new Set(); // bounty post ids already deleted (no need to fetch them again)
+
+/**
+ * Deletes the bot's small messages (claim announcements, alerts, gift notes, duels,
+ * wheel spins, replies…) once they are older than Cleanup_After_Days. Pinned
+ * messages, bounty posts and the big moments stay (cleanup.js decides).
+ */
+let cleaning = false;
+async function cleanupChannels() {
+  const s = S();
+  if (cleaning || !(s.cleanupDays > 0)) return;
+  cleaning = true;
+  try {
+    const ids = [...new Set([s.boardChannelId, s.awardsChannelId, s.submissionsChannelId, s.wheelChannelId].filter(Boolean))];
+    const keepIds = new Set(sheet.getBounties().map(x => x.messageId).filter(Boolean));
+    const t = now();
+    const stopAt = t - (s.cleanupDays + 60) * b.DAY; // older than this was cleaned long ago
+    let deleted = 0;
+    for (const id of ids) {
+      const channel = await fetchChannel(id);
+      if (!channel?.messages) continue;
+      let before;
+      for (let page = 0; page < 5; page++) { // newest 500 messages at most
+        const batch = await channel.messages.fetch({ limit: 100, ...(before ? { before } : {}) }).catch(() => null);
+        if (!batch?.size) break;
+        for (const m of batch.values()) {
+          const msg = { id: m.id, authorId: m.author?.id, createdAt: m.createdTimestamp, pinned: m.pinned, titles: m.embeds.map(x => x.title) };
+          if (!cl.shouldDelete(msg, { botId: client.user.id, now: t, days: s.cleanupDays, keepIds })) continue;
+          if (await m.delete().then(() => true).catch(() => false)) deleted++;
+        }
+        const oldest = batch.last();
+        if (!oldest || oldest.createdTimestamp < stopAt) break;
+        before = oldest.id;
+      }
+    }
+    if (deleted) console.log(`🧹 Cleaned up ${deleted} old bot message${deleted === 1 ? '' : 's'}.`);
+  } catch (err) {
+    console.error(`⚠️ Channel cleanup failed: ${err.message}`);
+  } finally {
+    cleaning = false;
+  }
+}
+
 async function refreshBoards() {
   const s = S();
   const posted = b.postedBounties(sheet.getBounties());
   if (!posted.length || !s.boardChannelId) return;
-  const open = b.openBounties(sheet.getBounties(), now(), s);
-  const oldestOpen = open[open.length - 1];
-  const justClosed = posted.filter(x => !open.includes(x) && (!oldestOpen || x.postedAt < oldestOpen.postedAt)).pop();
-  const targets = [...open, ...(justClosed ? [justClosed] : [])].filter(x => x.messageId);
+  const t = now();
+  const open = b.openBounties(sheet.getBounties(), t, s);
+  // Closed posts go short → one line → deleted (see cleanup.js). Only the last
+  // 12 closed posts are looked at, so old ones aren't fetched again and again.
+  const closed = posted.filter(x => !open.includes(x) && x.messageId && !goneBoards.has(x.messageId)).slice(-12);
+  const targets = [...open.filter(x => x.messageId), ...closed];
   if (!targets.length) return;
 
   const channel = await fetchChannel(s.boardChannelId);
   if (!channel) return;
   for (const bounty of targets) {
-    const embed = e.boardEmbed(withCode(bounty), viewFor(bounty), s, links());
+    const stage = open.includes(bounty) ? 'open' : cl.closedStage(b.closesAt(sheet.getBounties(), bounty, s), t, s);
+    if (stage === 'delete') {
+      try {
+        const msg = await channel.messages.fetch(bounty.messageId);
+        await msg.delete();
+        console.log(`🧹 Deleted the old bounty post for ${bounty.weekOf} (${bounty.boss}).`);
+      } catch (err) {
+        if (err.code !== 10008) { console.error(`⚠️ Could not delete the old bounty post for ${bounty.weekOf}: ${err.message}`); continue; }
+      }
+      goneBoards.add(bounty.messageId);
+      continue;
+    }
+    const embed = e.boardEmbed(withCode(bounty), { ...viewFor(bounty), oneLine: stage === 'line' }, s, links());
     const key = JSON.stringify(embed);
     if (lastRendered.get(bounty.messageId) === key) continue;
     try {
@@ -248,6 +306,8 @@ async function refreshBoards() {
         } catch (e2) {
           console.error(`⚠️ Could not re-post the bounty for ${bounty.weekOf}: ${e2.message}`);
         }
+      } else if (err.code === 10008) {
+        goneBoards.add(bounty.messageId); // a closed post someone deleted: leave it
       } else {
         console.error(`⚠️ Could not update the bounty post for ${bounty.weekOf}: ${err.message}`);
       }
@@ -1449,6 +1509,8 @@ client.once(Events.ClientReady, async () => {
   tick();
   setInterval(() => ensureCommands({ quiet: true }), 5 * 60 * 1000);
   setInterval(async () => { if (await sheet.refreshConfig()) { await ensureGuide(); await refreshBoards(); } }, 5 * 60 * 1000);
+  setTimeout(cleanupChannels, 2 * 60 * 1000); // tidy old bot messages: soon after start, then every hour
+  setInterval(cleanupChannels, 60 * 60 * 1000);
 });
 
 client.on(Events.Error, err => console.error(`❌ Discord client error: ${err.message}`));

@@ -59,7 +59,39 @@ function codeWordField(bounty) {
   };
 }
 
+/**
+ * A CLOSED bounty post, short: who claimed first, any big prize, and who claimed it.
+ * `oneLine` (older posts): the names on one line, without points.
+ */
+function closedBoardEmbed(bounty, view, { oneLine = false } = {}) {
+  const fields = [];
+  if (view.grand > 0) {
+    fields.push({ name: '🏆 Grand Bounty', value: view.first ? `**${view.grand}M GP** won by ${view.first.player}` : 'Not won', inline: true });
+  }
+  if (view.pot > 0) {
+    fields.push({ name: '💰 Sponsor pot', value: view.first ? `**${view.pot} pts** went to ${view.first.player}` : `**${view.pot} pts** refunded`, inline: true });
+  }
+  if (view.claims.length) {
+    const value = oneLine
+      ? clip(view.claims.map(c => c.player).join(', '), 1024)
+      : [...view.claims.slice(0, 25).map((c, i) => `${i === 0 && view.first ? '🥇' : `${i + 1}.`} ${c.player} · +${c.change}`),
+        ...(view.claims.length > 25 ? [`…and ${view.claims.length - 25} more`] : [])].join('\n');
+    fields.push({ name: `Claimed by (${view.claims.length})`, value });
+  }
+  return {
+    color: GREY,
+    author: { name: `🎯 BOUNTY · WEEK OF ${weekLabel(shownWeek(bounty)).toUpperCase()}` },
+    title: `${bounty.boss} · CLOSED`,
+    description: view.first
+      ? `🥇 **${view.first.player}** claimed it first for **${view.first.change} points**. This bounty is closed.`
+      : 'Nobody claimed this bounty. It is closed.',
+    fields,
+    footer: { text: 'Earlier bounties: /bhpast' }
+  };
+}
+
 function boardEmbed(bounty, view, settings, links = {}) {
+  if (view.closed) return closedBoardEmbed(bounty, view, { oneLine: view.oneLine });
   const fields = [...(bounty.codeWord && !view.closed ? [codeWordField(bounty)] : []), ...partFields(bounty)];
   let color = GOLD;
   let status = '';
@@ -531,7 +563,7 @@ function prizeAdminEmbed({ what, player, playerId, amount }) {
 }
 
 module.exports = {
-  grandWinEmbed, drawEmbed, prizeAdminEmbed,
+  grandWinEmbed, drawEmbed, prizeAdminEmbed, closedBoardEmbed,
   ts, weekLabel, shownWeek, bountyView, boardEmbed, progressEmbed, claimEmbed, multiplierEmbed, newBountyEmbed,
   table, leaderboardEmbed, monthlyWinnersEmbed, meEmbed, shopEmbed, confirmBuyEmbed, confirmPickEmbed, pickAdminEmbed, adminPurchaseEmbed, pastEmbed,
   wheelOddsText, spinFrameEmbed, adminLogEmbed, helpEmbed, GUIDE_TITLE,
