@@ -451,7 +451,7 @@ function helpEmbed(settings, { admin = false, pinned = false } = {}) {
     ...(settings.multiplier > 1
       ? [`🔥 Nobody finished after **${settings.multiplierAfterHours} hours**? The first claim becomes **×${settings.multiplier}**.`] : []),
     ...(settings.grandPrize > 0
-      ? [`🏆 **Grand Bounty**: the hardest bounties also pay the first finisher **${settings.grandPrize}M GP**. Not won? The next one pays ${settings.grandRollover}M more (up to ${Math.max(settings.grandMax, settings.grandPrize)}M).`] : []),
+      ? [`🏆 **Grand Bounty**: bounties marked 🏆 also pay the first finisher **${settings.grandPrize}M GP**. Not won? The next one pays ${settings.grandRollover}M more (up to ${Math.max(settings.grandMax, settings.grandPrize)}M).`] : []),
     ...(settings.drawPrize > 0
       ? [`🎟️ **Monthly draw**: every claim is 1 ticket, whatever the bounty. On the 1st of the month one ticket wins **${settings.drawPrize}M GP**.`] : []),
     'You can claim each bounty **once**. You have until the next bounty is posted.',

@@ -33,6 +33,29 @@ test('qualifies: Elite points, posted after the start, prize on', () => {
   assert.equal(pz.qualifies({ ...bounty('a', 0, 100), postedAt: null }, S), false);
 });
 
+test('qualifies: with a Grand Bounty column only ticked bounties count, whatever their points', () => {
+  const M = { ...S, grandManual: true };
+  assert.equal(pz.qualifies({ ...bounty('a', 0, 20), grand: true }, M), true);
+  assert.equal(pz.qualifies({ ...bounty('a', 0, 100), grand: false }, M), false);
+  assert.equal(pz.qualifies({ ...bounty('a', 0, 100), grand: null }, M), false); // History row from before the column
+  assert.equal(pz.qualifies({ ...bounty('a', 0, 20), grand: true, postedAt: T0 - 5 * DAY }, M), false);
+  // parsing: tick box / TRUE / x count; no column = null
+  const drops = [];
+  assert.equal(b.parseBounty({ boss: 'X', grand: true }, drops).grand, true);
+  assert.equal(b.parseBounty({ boss: 'X', grand: 'TRUE' }, drops).grand, true);
+  assert.equal(b.parseBounty({ boss: 'X', grand: '' }, drops).grand, false);
+  assert.equal(b.parseBounty({ boss: 'X' }, drops).grand, null);
+  // the History copy keeps the tick
+  assert.equal(b.historyRow({ boss: 'X', grand: true }, '2026-12-07').grand, true);
+  assert.equal(b.historyRow({ boss: 'X', grand: null }, '2026-12-07').grand, false);
+});
+
+test('pot: rollover only counts ticked bounties in manual mode', () => {
+  const M = { ...S, grandManual: true };
+  const list = [{ ...bounty('w1', 0, 20), grand: true }, { ...bounty('w2', 7, 100), grand: false }, { ...bounty('w3', 14, 45), grand: true }];
+  assert.equal(pz.grandPotFor(list, [], list[2], M, T0 + 60 * DAY), 200); // w1 unclaimed adds 50, w2 isn't one
+});
+
 test('pot: base, grows per unclaimed Elite, caps, resets after a win', () => {
   const list = [bounty('w1', 0, 100), bounty('w2', 7, 45), bounty('w3', 14, 100), bounty('w4', 21, 100), bounty('w5', 28, 100), bounty('w6', 35, 100), bounty('w7', 42, 100)];
   const now = T0 + 60 * DAY;

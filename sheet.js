@@ -28,6 +28,11 @@ const justWritten = new Map(); // weekOf -> when the bot wrote its History row
 let shop = [];
 let wheel = [];
 let settings = b.readSettings({});
+// Settings plus one fact about the sheet: does the Bounties tab have a "Grand Bounty" column?
+function rebuildSettings() {
+  const grandManual = (state.bountyRows || []).some(r => r && Object.prototype.hasOwnProperty.call(r, 'grand'));
+  settings = { ...b.readSettings(state.rawSettings), grandManual };
+}
 
 function configure(sheetUrl) { url = String(sheetUrl || '').trim(); return Boolean(url); }
 
@@ -55,7 +60,7 @@ function applyConfig(body) {
   if (Array.isArray(body.approvers)) state.approvers = body.approvers.map(String);
   if (body.settings && typeof body.settings === 'object') state.rawSettings = body.settings;
 
-  settings = b.readSettings(state.rawSettings);
+  rebuildSettings();
   // Keep posting info the bot wrote but the sheet read may not show yet.
   const previous = new Map(bounties.map(x => [x.weekOf, x]));
   bounties = b.parseBounties(state.historyRows.map(historyToBounty), state.drops).map(row => {
@@ -230,7 +235,7 @@ async function setPurchaseDelivered(id, deliveredBy) {
 
 async function setSetting(key, value) {
   state.rawSettings[key] = value;
-  settings = b.readSettings(state.rawSettings);
+  rebuildSettings();
   return post({ action: 'setting', key, value }, { retry: true });
 }
 

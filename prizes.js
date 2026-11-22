@@ -1,7 +1,8 @@
 // Big GP prizes on top of the points (pure, testable).
 //
-// GRAND BOUNTY: a bounty whose First Points are at least Grand_Bounty_Min_First_Points
-// (100 = Elite) pays the first finisher a GP prize as well. If such a bounty
+// GRAND BOUNTY: a bounty ticked in the Bounties tab's "Grand Bounty" column (or, when
+// that column doesn't exist, one whose First Points are at least
+// Grand_Bounty_Min_First_Points) pays the first finisher a GP prize as well. If such a bounty
 // closes with nobody finishing it, the next one's prize grows by
 // Grand_Bounty_Rollover, up to Grand_Bounty_Max.
 //
@@ -26,6 +27,8 @@ const prizeRow = (points, ref) =>
 function qualifies(bounty, s) {
   if (!(s.grandPrize > 0) || !s.grandSince || !bounty?.postedAt) return false;
   if (bounty.postedAt < s.grandSince) return false;
+  // The Bounties tab has a "Grand Bounty" column: only ticked bounties count.
+  if (s.grandManual) return bounty.grand === true;
   return (bounty.firstPoints ?? s.defaultFirst) >= s.grandMinFirst;
 }
 

@@ -52,7 +52,7 @@ paid twice). All Settings rows are optional; amounts are in **millions of GP**.
 | Setting | Default | Meaning |
 |---|---|---|
 | `Grand_Bounty_Prize` | 150 | GP for the first finisher of a Grand Bounty. `0` = off. |
-| `Grand_Bounty_Min_First_Points` | 100 | A bounty is a Grand Bounty when its First Points are at least this (100 = Elite). |
+| `Grand_Bounty_Min_First_Points` | 100 | Used only when the Bounties tab has NO `Grand Bounty` column: a bounty is a Grand Bounty when its First Points are at least this. |
 | `Grand_Bounty_Rollover` | 50 | Added to the next Grand Bounty when one closes with nobody finishing it. |
 | `Grand_Bounty_Max` | 300 | The prize never grows past this. |
 | `Monthly_Draw_Prize` | 100 | GP drawn on the 1st of the month. Every claim in the month = 1 ticket, any tier. `0` = off. |
@@ -61,6 +61,13 @@ paid twice). All Settings rows are optional; amounts are in **millions of GP**.
 The pot is worked out from History + Points, nothing else is stored: it resets
 to the base after a win (or any claim), and grows only once a Grand Bounty has
 **closed** unclaimed. The draw runs together with the monthly top-3 post.
+
+**Choosing Grand Bounties yourself:** add a `Grand Bounty` column to the Bounties
+tab (or rerun `setupBountyHunter`, which adds it with tick boxes) and tick the
+bounties you want. Once the column exists, ONLY ticked bounties are Grand Bounties,
+whatever their points. The tick is copied into History when a bounty goes up, so
+unticking later does not change a week that already ran. Delete the whole column to
+go back to the First Points rule.
 Voiding the winning claim does **not** undo the prize: delete its `gp prize`
 row by hand if the GP should not be paid (the next first claim then wins it).
 

@@ -276,7 +276,7 @@ test('history row is a full copy of the bounty with who chose it', () => {
   const [p] = b.parseBounties([{ boss: 'Telos', parts: ['Nex', '', ''], firstPoints: 15, laterPoints: 10, active: true }], drops);
   assert.deepEqual(b.historyRow(p, '2026-11-30', { chosenBy: 'Donini', chosenById: '1' }), {
     weekOf: '2026-11-30', boss: 'Telos', firstPoints: 15, laterPoints: 10, parts: ['Nex', '', ''],
-    codeWord: '', chosenBy: 'Donini', chosenById: '1'
+    codeWord: '', grand: false, chosenBy: 'Donini', chosenById: '1'
   });
 });
 

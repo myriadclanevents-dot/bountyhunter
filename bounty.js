@@ -230,6 +230,8 @@ function parseBounty(row, drops) {
     firstPoints: num(row.firstPoints, null),
     laterPoints: num(row.laterPoints, null),
     active: row.active === true || /^(true|yes|1|x|✓|✔)$/i.test(str(row.active)),
+    // Grand Bounty tick box: null = the tab has no such column (then First Points decide).
+    grand: row.grand === undefined ? null : row.grand === true || /^(true|yes|1|x|✓|✔)$/i.test(str(row.grand)),
     postedAt: Number(row.postedAt) || null,
     messageId: str(row.messageId),
     codeWord: str(row.codeWord),
@@ -358,7 +360,8 @@ function planWeek(pool, history, date, settings, rand = Math.random, { extra = f
   const fresh = b => ({ ...b, weekOf: freeKey(history, date), postedAt: null, messageId: '', chosenBy: '', chosenById: '' });
   const forced = extra ? null : usablePool(pool).find(p => p.weekOf === date);
   if (forced) return { bounty: fresh(forced), source: 'forced' };
-  const eligible = eligiblePool(pool, history, date, settings);
+  // A row forced for a LATER week waits for that week (never picked at random before it).
+  const eligible = eligiblePool(pool, history, date, settings).filter(p => !p.weekOf || p.weekOf <= date);
   if (!eligible.length) return null;
   return { bounty: fresh(eligible[Math.floor(rand() * eligible.length)]), source: extra ? 'extra' : 'random' };
 }
@@ -373,6 +376,7 @@ function historyRow(bounty, weekOf, extra = {}) {
     weekOf, boss: bounty.boss,
     firstPoints: bounty.firstPoints ?? '', laterPoints: bounty.laterPoints ?? '',
     parts: bounty.rawParts || [], codeWord: bounty.codeWord || '',
+    grand: bounty.grand === true,
     chosenBy: bounty.chosenBy || '', chosenById: bounty.chosenById || '',
     ...extra
   };

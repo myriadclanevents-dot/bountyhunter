@@ -77,7 +77,8 @@ var TABS = {
     ['laterPoints', 'Later Points', '', ''],
     ['active', 'Active', '', 'TRUE = can be picked. FALSE = skipped'],
     ['notes', 'Notes', '', ''],
-    ['codeWord', 'Code Word', '', 'Usually leave EMPTY: the bot picks a new secret word every week.\nA word typed here is used EVERY time this bounty comes up.']
+    ['codeWord', 'Code Word', '', 'Usually leave EMPTY: the bot picks a new secret word every week.\nA word typed here is used EVERY time this bounty comes up.'],
+    ['grand', 'Grand Bounty', '', 'OPTIONAL column. TRUE = this bounty is a Grand Bounty (big GP prize for the first finisher).\nWhen this column exists, ONLY ticked bounties are Grand Bounties.\nNo column = bounties with First Points >= Grand_Bounty_Min_First_Points.']
   ]},
   // One row per week, written by the bot: what went up (a copy), or a player's pick waiting for Monday.
   history: { name: 'History', cols: [
@@ -88,6 +89,7 @@ var TABS = {
     ['part1', 'Part 1', '', ''], ['part2', 'Part 2', '', ''], ['part3', 'Part 3', '', ''],
     ['part4', 'Part 4', '', ''], ['part5', 'Part 5', '', ''], ['part6', 'Part 6', '', ''],
     ['codeWord', 'Code Word', '', ''],
+    ['grand', 'Grand Bounty', '', 'TRUE = this week was a Grand Bounty (copied when posted)'],
     ['chosenBy', 'Chosen By', '', 'Player who bought "Pick next week\'s bounty" (empty = random)'],
     ['chosenById', 'Chosen By ID', 'id', 'Discord user id of that player'],
     ['postedAt', 'Posted At (UTC)', 'date', 'Empty = a pick waiting for Monday'],
@@ -587,6 +589,12 @@ function setupBountyHunter() {
     if (bmap.codeWord) {
       b.getRange(1, bmap.codeWord).setBackground(ADMIN_COLOR)
         .setNote(TABS.bounties.cols.filter(function (c) { return c[0] === 'codeWord'; })[0][3]);
+    }
+    if (bmap.grand) {
+      // Tick boxes: only ticked bounties are Grand Bounties once this column exists.
+      b.getRange(1, bmap.grand).setBackground(ADMIN_COLOR)
+        .setNote(TABS.bounties.cols.filter(function (c) { return c[0] === 'grand'; })[0][3]);
+      b.getRange(2, bmap.grand, Math.max(b.getLastRow() - 1, 1), 1).insertCheckboxes();
     }
     var heads = b.getRange(1, 1, 1, b.getLastColumn()).getValues()[0];
     heads.forEach(function (h, i) {

@@ -2,363 +2,307 @@
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
 <style>
-/* Layout: one reading column (max 980px); controls bar, then options → cost → tiers → shop/wheel → review points → method */
+/* Layout: one reading column (max 860px): status → how it works → cost → decisions → details (collapsed) */
 :root{
   --bg:#f5f6f8; --surface:#ffffff; --ink:#18202e; --ink-2:#4a5468; --muted:#6c7588; --line:#dfe3ea;
-  --accent:#9a6b12; --accent-soft:#f6ecd6; --navy:#1d2c4a;
+  --accent:#9a6b12; --accent-soft:#f6ecd6;
   --good:#1f7a3a; --good-soft:#e3f3e7; --warn:#9a5b00; --warn-soft:#fbefd9; --bad:#b3261e; --bad-soft:#fbe4e1;
-  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a;
+  --blue:#1c5cab; --blue-soft:#e4eefb;
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --old:#8e97a9;
   --f-display:"Sora","Segoe UI",system-ui,sans-serif; --f-body:"Inter","Segoe UI",system-ui,sans-serif; --f-mono:"JetBrains Mono",ui-monospace,Consolas,monospace;
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
   --bg:#11151d; --surface:#1a202b; --ink:#e9ecf2; --ink-2:#b9c0cf; --muted:#8e97a9; --line:#2c3443;
-  --accent:#e0b154; --accent-soft:#3a2f17; --navy:#c9d6f2;
+  --accent:#e0b154; --accent-soft:#3a2f17;
   --good:#5cc27a; --good-soft:#163222; --warn:#e6a94a; --warn-soft:#3a2a10; --bad:#f08a80; --bad-soft:#3d1c1a;
-  --s1:#3987e5; --s2:#d95926; --s3:#199e70; color-scheme:dark}}
+  --blue:#86b6ef; --blue-soft:#17273f;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --old:#5d6678; color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#11151d; --surface:#1a202b; --ink:#e9ecf2; --ink-2:#b9c0cf; --muted:#8e97a9; --line:#2c3443;
-  --accent:#e0b154; --accent-soft:#3a2f17; --navy:#c9d6f2;
+  --accent:#e0b154; --accent-soft:#3a2f17;
   --good:#5cc27a; --good-soft:#163222; --warn:#e6a94a; --warn-soft:#3a2a10; --bad:#f08a80; --bad-soft:#3d1c1a;
-  --s1:#3987e5; --s2:#d95926; --s3:#199e70; color-scheme:dark}
+  --blue:#86b6ef; --blue-soft:#17273f;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --old:#5d6678; color-scheme:dark}
 body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.55}
-.wrap{max-width:980px;margin:0 auto;padding-block:28px 64px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:40px}
+.wrap{max-width:860px;margin:0 auto;padding-block:28px 64px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:40px}
 h1,h2,h3{font-family:var(--f-display);text-wrap:balance;margin:0;color:var(--ink)}
 h1{font-size:2rem;line-height:1.15;letter-spacing:-.01em}
-h2{font-size:1.35rem;margin-bottom:6px}
-h3{font-size:1.02rem}
+h2{font-size:1.3rem}
+h3{font-size:1rem}
 p{margin:0;max-width:68ch}
 .eyebrow{font-family:var(--f-mono);font-size:.72rem;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);font-weight:600}
-.lede{color:var(--ink-2);font-size:1.02rem}
-section{display:flex;flex-direction:column;gap:14px}
+.lede{color:var(--ink-2);font-size:1.05rem}
 .sub{color:var(--muted);font-size:.9rem}
-.num,td.n,th.n{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
-header{display:flex;flex-direction:column;gap:10px}
-.findings{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
-.finding{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px;display:flex;flex-direction:column;gap:4px;min-width:0}
-.finding .big{font-family:var(--f-mono);font-size:1.5rem;font-weight:600;color:var(--navy)}
-.finding p{font-size:.9rem;color:var(--ink-2)}
-.controls{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px;display:flex;flex-wrap:wrap;gap:12px 18px;align-items:flex-end;box-shadow:0 4px 14px rgba(0,0,0,.06)}
-body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
-.ctl{display:flex;flex-direction:column;gap:3px;font-size:.78rem;color:var(--muted)}
-.ctl input,.ctl select{font:inherit;font-size:.92rem;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:5px 8px;width:7.5em}
-.ctl select{width:auto}
-.ctl input:focus-visible,.ctl select:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.options{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
-.opt{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:8px;min-width:0}
-.opt.rec{border:2px solid var(--accent);background:linear-gradient(var(--accent-soft),var(--surface) 60%)}
-.opt .tag{font-family:var(--f-mono);font-size:.72rem;font-weight:600;color:var(--accent);letter-spacing:.06em}
-.opt ul{margin:0;padding-left:18px;font-size:.9rem;color:var(--ink-2);display:flex;flex-direction:column;gap:3px}
-.opt .stat{display:flex;justify-content:space-between;gap:8px;font-size:.88rem;border-top:1px solid var(--line);padding-top:6px;margin-top:auto}
-.opt .stat b{font-family:var(--f-mono);color:var(--ink)}
-.pill{display:inline-block;font-size:.72rem;font-weight:600;padding:1px 8px;border-radius:999px;white-space:nowrap}
+section,header{display:flex;flex-direction:column;gap:14px}
+.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+code{font-family:var(--f-mono);font-size:.86em;background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:0 4px}
+
+/* status */
+.status{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}
+.st{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.st ul{margin:0;padding-left:18px;font-size:.9rem;color:var(--ink-2);display:flex;flex-direction:column;gap:3px}
+.pill{display:inline-block;align-self:flex-start;font-size:.72rem;font-weight:600;padding:2px 9px;border-radius:999px;white-space:nowrap}
 .pill.good{background:var(--good-soft);color:var(--good)} .pill.warn{background:var(--warn-soft);color:var(--warn)} .pill.bad{background:var(--bad-soft);color:var(--bad)}
-.tablebox{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:10px}
-table{border-collapse:collapse;width:100%;font-size:.88rem}
-th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
-th{font-size:.74rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600;background:var(--bg);white-space:nowrap}
-td.n,th.n{text-align:right;white-space:nowrap}
-tr:last-child td{border-bottom:0}
-tr.hl td{background:var(--accent-soft)}
-.tier{font-family:var(--f-mono);font-size:.74rem;font-weight:600;padding:1px 7px;border-radius:5px;white-space:nowrap}
-.t1{background:var(--good-soft);color:var(--good)} .t2{background:#e4eefb;color:#1c5cab} .t3{background:var(--warn-soft);color:var(--warn)} .t4{background:var(--bad-soft);color:var(--bad)}
-@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .t2{background:#17273f;color:#86b6ef}}
-:root[data-theme="dark"] .t2{background:#17273f;color:#86b6ef}
-.chart{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px;position:relative}
-.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:.82rem;color:var(--ink-2);margin-bottom:6px}
+
+/* how it works */
+.how{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+.hw{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.hw p{font-size:.9rem;color:var(--ink-2)}
+.hw .big{font-family:var(--f-mono);font-size:1.35rem;font-weight:600}
+.tiers{width:100%;border-collapse:collapse;font-size:.88rem}
+.tiers td{padding:4px 0;border-bottom:1px solid var(--line)}
+.tiers tr:last-child td{border-bottom:0}
+.tiers td.n{text-align:right;font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.tier{font-family:var(--f-mono);font-size:.72rem;font-weight:600;padding:1px 7px;border-radius:5px;white-space:nowrap}
+.t1{background:var(--good-soft);color:var(--good)} .t2{background:var(--blue-soft);color:var(--blue)} .t3{background:var(--warn-soft);color:var(--warn)} .t4{background:var(--bad-soft);color:var(--bad)}
+
+/* cost bars */
+.bars{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:14px}
+.bar{display:grid;grid-template-columns:minmax(0,11rem) 1fr;gap:6px 14px;align-items:center}
+.bar .lab{font-size:.9rem;font-weight:600;min-width:0}
+.bar .lab small{display:block;font-weight:400;color:var(--muted);font-size:.8rem}
+.track{display:flex;align-items:center;gap:8px;min-width:0}
+.fill{display:flex;height:22px;border-radius:4px;overflow:hidden;gap:2px}
+.fill i{display:block;height:100%}
+.track b{font-family:var(--f-mono);font-size:.9rem;white-space:nowrap}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:.82rem;color:var(--ink-2)}
 .legend i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:6px;vertical-align:-1px}
-svg text{font-family:var(--f-body)}
-.tip{position:absolute;pointer-events:none;background:var(--ink);color:var(--bg);font-size:.8rem;padding:6px 9px;border-radius:6px;white-space:nowrap;transform:translate(-50%,-110%)}
-.review{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px}
-.rv{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px;display:flex;flex-direction:column;gap:6px;min-width:0}
-.rv p{font-size:.9rem;color:var(--ink-2)}
-.rv .ask{font-size:.86rem;color:var(--ink);border-left:3px solid var(--accent);padding-left:9px}
-.rule{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px;display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}
-.rule div{min-width:0}
-.rule b{font-family:var(--f-display)}
-.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px}
-.two>div{min-width:0;display:flex;flex-direction:column;gap:8px}
-.pts{position:relative;border-bottom:1px dotted var(--accent);cursor:help;white-space:nowrap}
-.pts::after{content:attr(data-tip);position:absolute;left:50%;bottom:calc(100% + 6px);transform:translateX(-50%);background:var(--ink);color:var(--bg);font-size:.78rem;padding:5px 9px;border-radius:6px;white-space:normal;width:max-content;max-width:260px;text-align:left;line-height:1.4;font-family:var(--f-body);opacity:0;pointer-events:none;z-index:4}
-.pts:hover::after,.pts:focus-visible::after{opacity:1}
-.pts:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.decide{display:flex;flex-direction:column;gap:10px}
-.dq{display:grid;grid-template-columns:auto 1fr;gap:12px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
-.dq>div{min-width:0;display:flex;flex-direction:column;gap:6px}
-.dq p{font-size:.9rem;color:var(--ink-2)}
-.dq .ask{font-size:.88rem;color:var(--ink);border-left:3px solid var(--accent);padding-left:9px}
-.qn{font-family:var(--f-mono);font-weight:600;color:var(--accent);font-size:.95rem;padding-top:1px}
-.done{background:var(--good-soft);border-radius:10px;padding:14px 16px}
-.done h3{color:var(--good)}
-.done ul{margin:6px 0 0;padding-left:18px;font-size:.9rem;display:flex;flex-direction:column;gap:4px}
+@media (max-width:520px){.bar{grid-template-columns:1fr}}
+
+/* decisions */
+.decide{display:flex;flex-direction:column;gap:12px}
+.dq{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px;display:grid;grid-template-columns:auto 1fr;gap:4px 14px}
+.dq .qn{font-family:var(--f-mono);font-weight:600;color:var(--accent);font-size:1rem;grid-row:span 4}
+.dq>*{min-width:0}
+.dq p{font-size:.92rem;color:var(--ink-2)}
+.rec{background:var(--accent-soft);border-radius:8px;padding:8px 12px;font-size:.92rem;color:var(--ink);margin-top:6px}
+.rec b{color:var(--accent)}
+.how-to{font-size:.84rem;color:var(--muted);margin-top:4px}
+.answer{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.answer span{font-size:.82rem;border:1px solid var(--line);border-radius:6px;padding:3px 10px;color:var(--ink-2)}
+.answer span.yes{border-color:var(--accent);color:var(--ink);font-weight:600}
+
+/* details */
 details{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 16px}
 summary{cursor:pointer;font-weight:600}
-details ul{color:var(--ink-2);font-size:.9rem}
-@media (prefers-reduced-motion: no-preference){.opt,.rv{transition:border-color .15s}}
+summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+details[open] summary{margin-bottom:10px}
+details ul{color:var(--ink-2);font-size:.9rem;padding-left:18px;margin:0;display:flex;flex-direction:column;gap:4px}
+.tablebox{overflow-x:auto}
+.tt{border-collapse:collapse;width:100%;font-size:.86rem}
+.tt th,.tt td{text-align:left;padding:7px 9px;border-bottom:1px solid var(--line);vertical-align:top}
+.tt th{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600;background:var(--bg);white-space:nowrap}
+.tt td.n,.tt th.n{text-align:right;white-space:nowrap;font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.tt tr:last-child td{border-bottom:0}
 </style>
 
 <div class="wrap">
 <header>
-  <span class="eyebrow">Myriad · Bounty Hunter · proposal for the admin team · 21 Nov 2026</span>
+  <span class="eyebrow">Myriad · Bounty Hunter · for the admin team · updated 22 Nov 2026</span>
   <h1>Bounty rewards review</h1>
-  <p class="lede">Our old bounties paid 100M, 150M, sometimes 200M to the winner. The points system spreads rewards thinner: fairer, but nobody feels "omg, I want to win this". Since 21 Nov every bounty pays by how hard it really is. This page shows what that costs and proposes big GP prizes on top, so the excitement comes back. The decisions we need from you come first.</p>
-  <p class="sub">All numbers assume <b>10 active players</b> (change it in the bar below). Points are valued at 500k GP each, the rate our shop uses. Drop chances and kills per hour come from the RS3 wiki (read 21 Nov 2026), counted <b>per kill</b>, including every drop pile a kill gives. The difficulty table shows which game mode and enrage each number is for.</p>
+  <p class="lede">The old bounties paid one big prize (100–200M). The new system pays steady points every week, plus two big GP prizes so the "omg, I want this" moments come back. All of it is live since 22 Nov. Two small clean-ups are left.</p>
 </header>
 
 <section>
-  <div class="findings" id="findings"></div>
-</section>
-
-<section id="decide">
-  <span class="eyebrow">For the admin meeting</span>
-  <h2>What we need you to decide</h2>
-  <p class="sub">The numbers in the boxes match the bar further down, which uses 10 active players at 4 hours each a week. Change the bar and every number on the page updates.</p>
-  <div class="decide">
-    <div class="dq"><span class="qn">Q1</span><div><h3>How much can we spend per month?</h3><p>The sponsor and the clan bank set the ceiling. For comparison: the points now in the sheet pay out at most <b class="num" data-cost="B">–</b> a month. The full package is <b class="num" data-cost="R">–</b>, and the old bounties were about <b class="num" id="oldMonthly">–</b>.</p><p class="ask">Proposal: agree a monthly ceiling first. Everything else scales with it.</p></div></div>
-    <div class="dq"><span class="qn">Q2</span><div><h3>Do we add big GP prizes on top of the points?</h3><p><b>Grand Bounty</b>: the first player to finish an Elite bounty wins a GP prize, which grows when nobody wins it. <b>Monthly draw</b>: one big prize every month, with tickets for every claim. Both need new bot features, which are not built yet.</p><p class="ask">Proposal: both. The points keep the weekly rhythm; these two bring back the "omg, I want this" moments.</p></div></div>
-    <div class="dq"><span class="qn">Q3</span><div><h3>How big are those prizes?</h3><p>Grand Bounty <b>150M</b>, +50M for every Elite week nobody wins, up to 300M. Monthly draw <b>100M</b>. Together that is about <b class="num" data-big="R">–</b> prizes of 100M+ a year.</p><p class="ask">Proposal: start with these and review after 3 months.</p></div></div>
-    <div class="dq"><span class="qn">Q4</span><div><h3>×2 or ×1.5 after 72 hours?</h3><p>When nobody claims a bounty within 3 days, the first claim is multiplied. With 9 Elite bounties this happens often, so ×2 quietly doubles the price of the hardest bounties.</p><p class="ask">Proposal: ×1.5 (Settings → <code>Multiplier</code> = <code>1,5</code>).</p></div></div>
-    <div class="dq"><span class="qn">Q5</span><div><h3>Fix the bounties that are close to impossible?</h3><p>Legiones grips are 1 in 2,056 and only drop on a Slayer task. Telos, Ghrazi and Zamorak change a lot with enrage. The Profane Scabarite lens needs a Slayer task.</p><p class="ask">Proposal: replace Legiones grips with "any Ascension signet". Write the enrage or Slayer task into the Notes of the others.</p></div></div>
-    <div class="dq"><span class="qn">Q6</span><div><h3>Who checks the boss numbers?</h3><p>Kills per hour for Telos, Ghrazi, Arch Glacor, Profane Scabarite and Legiones are still our guesses. The Difficulty tab in the sheet holds every number behind the tiers.</p><p class="ask">Proposal: whoever farms a boss checks its row. After a change, run <code>applyDifficultyToBounties</code> and the points update.</p></div></div>
-    <div class="dq"><span class="qn">Q7</span><div><h3>Shop and wheel clean-up</h3><p>Two 115-point items say "Dye of choice", but a Third Age or Blood dye is worth billions. The wheel's points prizes only hand points back.</p><p class="ask">Proposal: rename them to "ordinary dye", and consider the GP-only wheel in the Shop section.</p></div></div>
-  </div>
-  <div class="done">
-    <h3>Already done (21 Nov)</h3>
-    <ul>
-      <li>Every bounty has a tier from its real drop rate and the boss's difficulty, and the Bounties tab pays by tier: Easy <span class="pts" tabindex="0" data-tip="8 points first winner, 3 points each later winner">8/3</span> · Medium <span class="pts" tabindex="0" data-tip="20 points first winner, 8 points each later winner">20/8</span> · Hard <span class="pts" tabindex="0" data-tip="45 points first winner, 18 points each later winner">45/18</span> · Elite <span class="pts" tabindex="0" data-tip="100 points first winner, 40 points each later winner">100/40</span>.</li>
-      <li>New <b>Difficulty</b> tab in the sheet with every number behind the tiers. The bot does not read it.</li>
-      <li>Vorago no longer counts Tectonic energy, which drops almost every kill. Arch Glacor asks for Scripture of Wen instead of the common Manuscript.</li>
-      <li>The wheel's 50M prize no longer has the wrong description.</li>
-    </ul>
-    <h3 style="margin-top:10px">Already decided</h3>
-    <ul>
-      <li><b>We go with B + C + D.</b> The tier points stay as they are, and two GP prizes come on top. The <b>Grand Bounty</b> pays 150M to the first finisher of an Elite bounty, +50M each time one goes unwon, up to 300M. The <b>monthly draw</b> pays 100M. Admins trade the GP in game, and the bot announces the winners and reminds the admins. All amounts can be changed in Settings. This answers Q2 and Q3.</li>
-      <li><b>Mid-level players get a fair shot.</b> Players who can only do Low or Mid bosses can earn from just 9 of the 20 bounties, so in more than half the weeks they have nothing to win. If we add the monthly draw, every claim gives <b>1 ticket, whatever the tier</b>, so an Easy claim counts as much as an Elite one. A mid player's chance of winning a 100M draw in a year goes from about 48% to about 62%.</li>
-      <li><b>More mid-level bounties.</b> The admins will add more bounties for Low and Mid bosses, so mid-level players have something to do in more weeks.</li>
-    </ul>
+  <span class="eyebrow">Where we stand</span>
+  <div class="status">
+    <div class="st"><span class="pill good">Live now</span><ul>
+      <li>Points by <b>difficulty tier</b>, with a flatter scale so every finisher gets a decent amount</li>
+      <li><b>Grand Bounty</b> (switched on 22 Nov) and <b>monthly draw</b> (counts claims from 1 Dec)</li>
+      <li>Bonus after 72 hours is now ×1.5</li>
+      <li>Shop, prize wheel, gifts, donations, duels</li>
+    </ul></div>
+    <div class="st"><span class="pill good">Decided 22 Nov</span><ul>
+      <li>Flatter scale: an Easy finisher now gets 15 points, not 3</li>
+      <li>Elite = 70+ first points (counts for the Grand Bounty)</li>
+      <li>Admins add more Easy and Medium bounties</li>
+      <li>Prize wheel: spin 30 points, big GP prizes only</li>
+    </ul></div>
+    <div class="st"><span class="pill bad">Still open</span><ul>
+      <li>Two shop items say "Dye of choice"</li>
+      <li>One bounty is close to impossible (Legiones)</li>
+    </ul></div>
   </div>
 </section>
 
-
-<div class="controls" role="group" aria-label="Assumptions">
-  <label class="ctl" for="cPlayers">Active players<input id="cPlayers" type="number" min="2" max="40" value="10"></label>
-  <label class="ctl" for="cHours">Hours each player spends on the bounty per week<input id="cHours" type="number" min="0.5" max="40" step="0.5" value="4"></label>
-  <label class="ctl" for="cGpp">GP per point (M)<input id="cGpp" type="number" step="0.1" min="0.1" value="0.5"></label>
-  <label class="ctl" for="cDraw">Monthly draw prize (M)<input id="cDraw" type="number" step="10" min="0" value="100"></label>
-  <label class="ctl" for="cJack">Grand Bounty prize (M)<input id="cJack" type="number" step="10" min="0" value="150"></label>
-  <label class="ctl" for="cOld">Old prize (M)<input id="cOld" type="number" step="10" min="0" value="150"></label>
-  <label class="ctl" for="cOldEvery">Old: once every … weeks<input id="cOldEvery" type="number" step="1" min="1" value="1"></label>
-</div>
-
-<section id="options">
-  <span class="eyebrow">The options</span>
-  <h2>Five ways to set it up</h2>
-  <p class="sub">B is what the sheet uses now. A is a cheaper alternative. C and D add a big GP prize on top of B. Our proposal is B + C + D together.</p>
-  <p class="sub"><b>How to read "5/2":</b> the first number is the points for the <b>first player</b> to finish the bounty. The second is the points for <b>each player who finishes after that</b>. Everyone can claim once. These are the sheet's First Points and Later Points columns. Example: on an Easy bounty the first finisher gets 5 points and every later finisher gets 2.</p>
-  <div class="options" id="optCards"></div>
+<section>
+  <span class="eyebrow">How rewards work</span>
+  <h2>Three layers</h2>
+  <div class="how">
+    <div class="hw">
+      <h3>1 · Weekly points</h3>
+      <p>Finish the bounty, get points. The <b>first</b> finisher gets the big number, everyone after gets the small one. 1 point = 500k GP in the shop.</p>
+      <table class="tiers">
+        <tr><td><span class="tier t1">EASY</span></td><td class="n">20 / 15</td></tr>
+        <tr><td><span class="tier t2">MEDIUM</span></td><td class="n">30 / 20</td></tr>
+        <tr><td><span class="tier t3">HARD</span></td><td class="n">45 / 25</td></tr>
+        <tr><td><span class="tier t4">ELITE</span></td><td class="n">70 / 35</td></tr>
+      </table>
+      <p class="sub">Example: finishing an Easy bounty after someone else still pays 15 pts (7.5M). If nobody claims within 3 days, the first claim gets ×1.5.</p>
+    </div>
+    <div class="hw">
+      <h3>2 · Grand Bounty</h3>
+      <span class="big">150M → 300M</span>
+      <p>The first player to finish an <b>Elite</b> bounty (70+ first points) wins 150M GP on top of their points. If an Elite week goes unclaimed, the next one is worth +50M, up to 300M. The pot shows on the board.</p>
+      <p class="sub">About 12 winners a year.</p>
+    </div>
+    <div class="hw">
+      <h3>3 · Monthly draw</h3>
+      <span class="big">100M</span>
+      <p>Every claim that month is 1 ticket, whatever the tier. An Easy claim counts as much as an Elite one, so mid-level players have a real chance.</p>
+      <p class="sub">12 winners a year. First draw 1 Jan, with December claims.</p>
+    </div>
+  </div>
 </section>
 
 <section>
   <span class="eyebrow">What it costs</span>
-  <h2>Monthly cost per option, compared with the old bounties</h2>
-  <p class="sub">The cost assumes every point earned is spent in the shop, so it is a ceiling. Points that are never spent, wheel losses and player-to-player features (gifts, duels, sponsors) bring the real cost down.</p>
-  <div class="chart" id="chartBox">
-    <div class="legend"><span><i style="background:var(--s1)"></i>Points (shop value)</span><span><i style="background:var(--s2)"></i>Grand Bounty GP prizes</span><span><i style="background:var(--s3)"></i>Monthly draw</span><span><i style="background:none;border-left:2px dashed var(--ink)"></i>Old bounties</span></div>
-    <svg id="chart" role="img" aria-label="Monthly cost per option" width="100%" height="270"></svg>
-    <div class="tip" id="tip" hidden></div>
+  <h2>Full package: about 470M a month, at most</h2>
+  <p class="sub">10 active players, 4 hours each a week on the bounty. "At most" because it assumes every point gets spent in the shop. Unspent points and wheel losses make the real cost lower.</p>
+  <div class="bars" role="img" aria-label="Monthly cost: old bounties about 650M, full package about 470M, points about 180M, before the change about 50M">
+    <div class="legend"><span><i style="background:var(--s1)"></i>Weekly points</span><span><i style="background:var(--s2)"></i>Grand Bounty</span><span><i style="background:var(--s3)"></i>Monthly draw</span><span><i style="background:var(--old)"></i>Old bounties</span></div>
+    <div class="bar"><span class="lab">Old bounties<small>150M every week</small></span><div class="track"><div class="fill" style="width:85%"><i style="width:100%;background:var(--old)"></i></div><b>~650M</b></div></div>
+    <div class="bar"><span class="lab">Full package<small>live now, all 3 layers</small></span><div class="track"><div class="fill" style="width:61.3%"><i style="width:38.6%;background:var(--s1)"></i><i style="width:40.1%;background:var(--s2)"></i><i style="width:21.3%;background:var(--s3)"></i></div><b>~470M</b></div></div>
+    <div class="bar"><span class="lab">Points part<small>new flatter scale</small></span><div class="track"><div class="fill" style="width:23.6%"><i style="width:100%;background:var(--s1)"></i></div><b>~180M</b></div></div>
+    <div class="bar"><span class="lab">Before 21 Nov<small>old flat 10 / 5 points</small></span><div class="track"><div class="fill" style="width:6.8%"><i style="width:100%;background:var(--s1)"></i></div><b>~50M</b></div></div>
   </div>
-  <div class="tablebox"><table id="costTable"></table></div>
+  <p class="sub">Full package = points ~180M + Grand Bounty ~190M + draw 100M. About 24 prizes of 100M+ a year across the clan, and still about 180M a month cheaper than the old bounties.</p>
+  <div class="how">
+    <div class="hw"><h3>Mid-level player</h3><span class="big">2.9 → 5.3 pts/week</span><p>Can do Low and Mid bosses only. The flatter scale almost doubles what they earn. With 6 more Easy/Medium bounties it rises to about 7.4.</p></div>
+    <div class="hw"><h3>Endgame player</h3><span class="big">11.5 → 12.2 pts/week</span><p>Elite first claims pay less (100 → 70), but the first Elite finisher also wins the 150M+ Grand Bounty, so endgame players still come out ahead.</p></div>
+  </div>
+  <p class="sub">Simulated with 5 mid-level and 5 endgame players, 4 hours each a week. Mid-level players still have nothing to do in about 58% of weeks, because 11 of the 20 bounties are endgame bosses. More Easy and Medium bounties is the fix for that.</p>
 </section>
 
-<section>
-  <span class="eyebrow">Difficulty</span>
-  <h2>Pay for difficulty, not for the boss</h2>
-  <p>Until 21 Nov almost every bounty paid <span class="pts" tabindex="0" data-tip="10 points first winner, 5 points each later winner">10 / 5</span>, whatever it asked. Each bounty now has a <b>tier</b> built from two things, and its points come from that tier. The tiers live in the sheet's <b>Difficulty</b> tab: admins can change a number or a boss rating there and run <code>applyDifficultyToBounties</code> to update the Bounties tab.</p>
-  <div class="rule">
-    <div><b>1 · Drop luck: hours to finish</b><p class="sub">The chance per kill of getting what the bounty asks for, counting every drop pile in a kill: Kerapac gives 3 piles, so 3 × 1/760 becomes 1/253 per kill. "Any of 4 items" adds up the 4 chances. When 2 or 3 parts are all required, we count the average kills until you have all of them. Average kills ÷ kills per hour from the wiki's money making guides = average hours to finish.</p></div>
-    <div><b>2 · Boss difficulty</b><p class="sub"><b>Low</b>: safe or mid-level bosses (QBD, Ivar, Gate, Croesus). <b>Mid</b>: needs good gear and a few mechanics. <b>High</b>: endgame, mechanics-heavy, or needs a team. <b>Very high</b>: top-end enrage bosses (Telos, Zamorak, Ghrazi). The rating comes from the wiki's requirements and fight notes. We also use it to estimate how many of our active players can do the boss at all: Low 100%, Mid 80%, High 50%, Very high 25%.</p></div>
-  </div>
-  <div class="rule">
-    <div><span class="tier t1">EASY</span><p class="sub">2 hours or less</p></div>
-    <div><span class="tier t2">MEDIUM</span><p class="sub">2–6 hours</p></div>
-    <div><span class="tier t3">HARD</span><p class="sub">6–15 hours</p></div>
-    <div><span class="tier t4">ELITE</span><p class="sub">over 15 hours</p></div>
-  </div>
-  <p class="sub">A <b>High</b> or <b>Very high</b> boss moves the bounty <b>one tier up</b>. Kills per hour are the wiki guides' figures for experienced players, so most of us will be slower. That changes the hours, but the order of the bounties stays the same. Rows marked <span class="pill warn">assumed</span> have no kills-per-hour figure on the wiki, so we used our own guess. Hover over any chance or kills figure to see where it comes from.</p>
-  <div class="tablebox"><table id="tierTable"></table></div>
-</section>
-
-<section>
-  <span class="eyebrow">Shop and wheel</span>
-  <h2>Can an active player actually afford something?</h2>
-  <div class="two">
-    <div>
-      <h3>Weeks of play to buy a shop item (average active player)</h3>
-      <p class="sub">Price in points ÷ points an average active player earns per week. Strong players get there faster, casual players slower.</p>
-      <div class="tablebox"><table id="shopTable"></table></div>
+<section id="wheel">
+  <span class="eyebrow">Prize wheel</span>
+  <h2>Big prizes, about the same value as the shop</h2>
+  <p>A spin costs <b>30 points</b> (15M). Every GP win is 50M or more. On average the wheel pays about 480k GP per point, just under the shop's 500k.</p>
+  <div class="how">
+    <div class="tablebox" style="background:var(--surface);border:1px solid var(--line);border-radius:10px">
+      <table class="tt">
+        <thead><tr><th>Prize</th><th class="n">Chance</th></tr></thead>
+        <tbody>
+          <tr><td>Nothing</td><td class="n">45%</td></tr>
+          <tr><td>+20 points back</td><td class="n">40%</td></tr>
+          <tr><td>50M GP</td><td class="n">11%</td></tr>
+          <tr><td>100M GP</td><td class="n">3%</td></tr>
+          <tr><td>200M GP (jackpot)</td><td class="n">1%</td></tr>
+        </tbody>
+      </table>
     </div>
-    <div>
-      <h3>Prize wheel: what a 20-point spin pays back</h3>
-      <p class="sub">A spin costs 20 points (10M at 500k each). Bond value assumed: <label for="cBond">enter today's price (M)</label> <input id="cBond" type="number" step="5" min="0" value="150" style="width:5em;font:inherit;padding:2px 6px;border:1px solid var(--line);border-radius:5px;background:var(--bg);color:var(--ink)">.</p>
-      <div class="tablebox"><table id="wheelTable"></table></div>
-      <p class="sub" id="wheelNote"></p>
+    <div class="tablebox" style="background:var(--surface);border:1px solid var(--line);border-radius:10px">
+      <table class="tt">
+        <thead><tr><th>Spend 200 points</th><th class="n">Wheel</th><th class="n">Shop 100M</th></tr></thead>
+        <tbody>
+          <tr><td>Spins</td><td class="n">~9</td><td class="n">–</td></tr>
+          <tr><td>GP won, on average</td><td class="n">~95M</td><td class="n">100M</td></tr>
+          <tr><td>Chance of at least one GP win</td><td class="n">77%</td><td class="n">100%</td></tr>
+          <tr><td>Chance of the 200M jackpot</td><td class="n">9%</td><td class="n">–</td></tr>
+          <tr><td>Clan pays per point</td><td class="n">~480k</td><td class="n">500k</td></tr>
+        </tbody>
+      </table>
     </div>
   </div>
+  <div class="tablebox" style="background:var(--surface);border:1px solid var(--line);border-radius:10px">
+    <table class="tt">
+      <thead><tr><th>Clan cost for 100 spins, on average</th><th class="n">Wins</th><th class="n">GP paid</th></tr></thead>
+      <tbody>
+        <tr><td>50M GP</td><td class="n">11</td><td class="n">550M</td></tr>
+        <tr><td>100M GP</td><td class="n">3</td><td class="n">300M</td></tr>
+        <tr><td>200M GP</td><td class="n">1</td><td class="n">200M</td></tr>
+        <tr><td>+20 points back</td><td class="n">40</td><td class="n">800 pts</td></tr>
+        <tr><td>Nothing</td><td class="n">45</td><td class="n">–</td></tr>
+        <tr style="background:var(--accent-soft)"><td><b>Total</b></td><td class="n">100</td><td class="n"><b>1,050M GP</b></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="sub">100 spins take in 3,000 points and hand 800 back, so 2,200 points are used up. In the shop those 2,200 points would cost the clan 1,100M, so the wheel costs about the same, slightly less. Average per spin: 10.5M GP paid out, 8 points back. Luck swings a lot over 100 spins: one extra 200M jackpot changes the total by 20%.</p>
 </section>
 
-<section>
-  <span class="eyebrow">Background</span>
-  <h2>Why we propose this</h2>
-  <div class="review">
-    <div class="rv"><h3>Write the mode, enrage and team size into each bounty</h3><p>The same item has very different odds. Zuk and Vorago drop twice as often in hard mode. Zamorak's codex goes from 1 in 606 (under 20% enrage) to 1 in 78 (2,000%). The Ambassador crossbow roll is 1 in 55 solo but 1 in 166 in a trio. Croesus depends on your contribution.</p><p class="ask">Add a line to Notes, e.g. "any mode" or "hard mode only", "solo or group". Our tiers assume the mode named in the table.</p></div>
-    <div class="rv"><h3>The ×2 mostly hits hard bounties</h3><p>On Hard and Elite bounties nobody claims in the first 3 days quite often, so the ×2 becomes a hidden price doubling (see Q4).</p></div>
-    <div class="rv"><h3>Points alone don't create big moments</h3><p>Even with the new points, the 100M shop item takes an active player months of play (see the shop table). The shop works well for steady small rewards. A single 100M+ win needs the Grand Bounty or the draw (see Q2).</p></div>
-    <div class="rv"><h3>Unspent points are money we owe</h3><p>Every point in a wallet is a promise of 500k. If many players save up, a large bill can arrive at once.</p><p class="ask">Keep Stock limits on the GP items (the 100M already has 3) and check the total of all wallets once a month.</p></div>
+<section id="decide">
+  <span class="eyebrow">Open items</span>
+  <h2>Two clean-ups left</h2>
+  <div class="st" style="background:var(--good-soft);border-color:transparent">
+    <span class="pill good">Done 22 Nov</span>
+    <ul>
+      <li><b>Grand Bounty and monthly draw switched on:</b> 150M, +50M per unclaimed Elite week, max 300M; 100M draw, first draw 1 Jan with December claims.</li>
+      <li><b>Bonus after 72 hours set to ×1.5</b> (was ×2). An unclaimed Elite already grows the Grand Bounty, so ×2 rewarded the same thing twice.</li>
+      <li><b>Flatter points scale:</b> 20/15, 30/20, 45/25, 70/35 (was 8/3, 20/8, 45/18, 100/40).</li>
+      <li><b>Elite threshold for the Grand Bounty set to 70</b> first points (Settings → <code>Grand_Bounty_Min_First_Points</code>).</li>
+      <li><b>Prize wheel:</b> spin 30 points; Nothing 45, +20 points back 40, 50M 11, 100M 3, 200M 1. About 480k per point.</li>
+    </ul>
+  </div>
+  <div class="decide">
+    <div class="dq">
+      <span class="qn">1</span>
+      <h3>Rename the two "Dye of choice" shop items?</h3>
+      <p>"Pernix's quiver & Dye of choice" and "Grasping rune pouch & Dye of choice" cost 115 points (~58M). A player could pick a Third Age or Blood dye, worth billions.</p>
+      <div>
+        <p class="rec"><b>Recommended: yes</b>, rename to "… & ordinary dye" (or list the allowed colours).</p>
+        <div class="answer"><span class="yes">Rename</span><span>Remove them</span><span>Leave as is</span></div>
+        <p class="how-to">Shop tab → Item column. The bot picks it up within 5 minutes.</p>
+      </div>
+    </div>
+    <div class="dq">
+      <span class="qn">2</span>
+      <h3>Replace the Legiones grips bounty?</h3>
+      <p>Ascension grips are 1 in 2,056 and only drop on a Slayer task: roughly 100 hours. Nobody will finish it in a week.</p>
+      <div>
+        <p class="rec"><b>Recommended: replace</b> with "any Ascension signet". While editing: write the enrage into Telos, Ghrazi and Zamorak, and "on Slayer task" into Profane Scabarite.</p>
+        <div class="answer"><span class="yes">Replace</span><span>Keep, set Active = FALSE</span><span>Keep as is</span></div>
+        <p class="how-to">Bounties tab. For new tiers: update the Difficulty tab, then run <code>applyDifficultyToBounties</code>.</p>
+      </div>
+    </div>
   </div>
 </section>
 
 <details>
-  <summary>How these numbers were worked out</summary>
+  <summary>Every bounty and its tier</summary>
+  <p class="sub" style="margin-bottom:10px">Tier = average hours to finish (wiki drop rate ÷ kills per hour): up to 2 h Easy, 2–6 Medium, 6–15 Hard, over 15 Elite. A High or Very high difficulty boss moves it one tier up. Today: 2 Easy, 3 Medium, 6 Hard, 9 Elite.</p>
+  <div class="tablebox"><table class="tt" id="tierTable"></table></div>
+</details>
+
+<details>
+  <summary>How the numbers were worked out</summary>
   <ul>
-    <li>Each week one bounty is picked at random from the 20 rows in the sheet.</li>
-    <li>For each bounty: average hours to finish = average kills needed ÷ kills per hour (see the difficulty table). A player who spends <i>H</i> hours on it finishes with chance 1 − e<sup>−H / hours</sup>, multiplied by the share of players who can do that boss (Low 100%, Mid 80%, High 50%, Very high 25%).</li>
-    <li>Drop chances are per kill and include every drop pile (Kerapac 3, Arch-Glacor normal mode 3, Vorago 5 piles shared by the team). When several parts are all needed, the average kills is the expected wait until you hold one of each.</li>
-    <li>Finish times are spread over the week, so the first claim gets the multiplier when nobody finishes in the first 72 hours. Results come from a 20,000-week simulation in this page.</li>
-    <li>"Before" uses the First/Later Points the sheet had until 21 Nov, with ×2 after 72h. Option B is what the sheet has now. Kills per hour and boss ratings come from the Difficulty tab (read 21 Nov 2026).</li>
-    <li>Grand Bounty: an Elite week nobody claims adds 50M to the next Elite prize, up to 300M. Monthly draw: every claim gives 1 ticket, whatever the tier. The cost is simply the prize. "Chance to win a big prize" assumes equal players.</li>
-    <li>Not counted: Pick next week's bounty, sponsors, duels, gifts and donations. They move points between players and cost the clan nothing.</li>
-    <li>Sources: the boss pages and "Money making guide" pages on runescape.wiki, read 21 Nov 2026.</li>
+    <li>Each week one of the 20 bounties is picked at random. A 20,000-week simulation estimates who finishes and when.</li>
+    <li>A player who spends 4 hours finishes with chance 1 − e<sup>−4 / hours to finish</sup>, times the share of players who can do the boss at all (Low 100%, Mid 80%, High 50%, Very high 25%).</li>
+    <li>Drop chances are per kill, counting every drop pile, from the RS3 wiki (read 21 Nov 2026). Kills per hour from the wiki money-making guides, or our own numbers in the Difficulty tab.</li>
+    <li>Grand Bounty: an unclaimed Elite week adds 50M to the next one, up to 300M. The pot resets when someone wins.</li>
+    <li>Not counted: Pick next week's bounty, sponsors, duels, gifts, donations. They move points between players and cost the clan nothing.</li>
+    <li>Old bounties: 150M paid every week ≈ 650M a month.</li>
   </ul>
 </details>
 </div>
 
 <script>
 const W_="https://runescape.wiki/w/";
-// kills = average kills to finish; kph = kills (or runs) per hour; diff 0 Low,1 Mid,2 High,3 Very high
-const BOUNTIES=[
- {boss:"Araxxor",url:"Araxxi",needs:"1 leg piece AND 1 Araxxi piece",mode:"Solo",chance:"Leg 1/40 · Araxxi piece 1/120",tip:"Leg pieces 1/40 (the piece depends on the path). Eye/fang/web: 1/240 for the current form, 1/480 for the others, so 1/120 for any. Both parts: about 130 kills.",kills:130,kph:14,diff:1,f:20,l:10},
- {boss:"Vorago",url:"Vorago",needs:"Seismic wand or Seismic singularity",mode:"Normal, trio",chance:"about 1/120 per player",tip:"One seismic per kill at most, 1/40 per kill for the whole team, so about 1/120 for each player in a trio. Solo: 1/40 at 4 kills/hr. Hard mode doubles it (1/20).",kills:120,kph:7,diff:2,f:10,l:5,flag:["good","Tectonic energy removed"]},
- {boss:"Raksha",url:"Raksha,_the_Shadow_Colossus",needs:"Any of 4 uniques",mode:"Solo",chance:"1/81",tip:"Shadow spike, Greater Ricochet, Greater Chain and Divert are each 1/325 per kill.",kills:81,kph:20,diff:2,f:20,l:10},
- {boss:"Telos",url:"Telos,_the_Warden",needs:"Any dormant weapon",mode:"100% enrage",chance:"about 1/1,100",tip:"Each dormant is 10/115 of the unique roll. The unique roll is about 1/1000 plus 1/1000 per 40% enrage (the wiki marks this as unconfirmed). At 1000% enrage about 1/147.",kills:1100,kph:10,kphA:1,diff:3,f:15,l:10,flag:["warn","Name an enrage in the bounty"]},
- {boss:"Kerapac",url:"Kerapac,_the_bound",needs:"Wrist wraps or Greater Conc. Blast codex",mode:"Normal, solo",chance:"1/127",tip:"3 drop piles per kill, each item 1/760 per pile, so 1/253 each per kill. Hard mode: about 1/90 per kill at 10 kills/hr.",kills:127,kph:25,diff:1,f:10,l:5},
- {boss:"Nakatra",url:"Nakatra,_Devourer_Eternal",needs:"Roar, Ode or Nakatra's mosaic",mode:"Normal, full Sanctum run",chance:"about 1/30",tip:"Roar 1/150, Ode 1/150, mosaic 1/50 (extra drop). Without the mosaic: 1/75, about 12.5 hours.",kills:30,kph:5,diff:2,f:10,l:5,flag:["warn","The mosaic makes it 2.5× easier"]},
- {boss:"Queen Black Dragon",url:"Queen_Black_Dragon",needs:"Complete royal crossbow (4 pieces)",mode:"Solo",chance:"Each piece 1/51",tip:"Frame, sight, bolt stabiliser and torsion spring are 5/253 each per kill. All 4 take about 26 kills, then Thurgo and forging (70 Smithing).",kills:26,kph:28,diff:0,f:10,l:5,flag:["good","Easier than it sounds"]},
- {boss:"Ghrazi Bloodknights",url:"The_Ghrazi_Blood_Knights",needs:"Invoke Arisen Flesh codex",mode:"1000% enrage",chance:"1/175",tip:"Normal mode 1/3,000 · 100% 1/750 · 500% 1/450 · 1000% 1/175 · 2000% 1/125.",kills:175,kph:6,kphA:1,diff:3,f:10,l:5,flag:["warn","Normal mode is 1/3,000"]},
- {boss:"Zamorak",url:"Zamorak,_Lord_of_Chaos",needs:"Chaos Roar codex",mode:"100% enrage",chance:"about 1/284",tip:"The codex is 16.5% of the signature drop. Under 20% enrage about 1/606 · 1000% about 1/113 · 2000% about 1/78.",kills:284,kph:10,diff:3,f:10,l:5},
- {boss:"Ambassador",url:"The_Ambassador",needs:"Any eldritch crossbow piece",mode:"Solo",chance:"1/55",tip:"Crossbow roll per kill: 1/55 solo · 1/111 duo · 1/166 trio.",kills:55,kph:2,diff:2,f:10,l:5},
- {boss:"Ivar",url:"Ivar,_King_of_Bones",needs:"Magic skull mask AND Bonecrusher maul",mode:"Any",chance:"1/64 each",tip:"A 1/32 unique roll split between the two (Drop Log estimate). Getting both takes about 96 kills.",kills:96,kph:50,diff:0,f:10,l:5},
- {boss:"Vorkath",url:"Zemouregal_%26_Vorkath",needs:"Invoke Lord of Bones codex",mode:"Normal",chance:"1/150 – 1/250",tip:"From the Difficulty tab: 150 kills at 15/hr for our players. The wiki gives 1/249 in normal mode and 1/150 in hard mode.",kills:150,kph:15,diff:1,f:10,l:5},
- {boss:"Arch-Glacor",url:"Arch-Glacor",needs:"Frozen core, Scripture of Wen or Leng artefact",mode:"Normal, 5 mechanics",chance:"about 1/83",tip:"Leng artefact and Scripture of Wen are each 3 × 1/500 per kill (3 drop piles). Frozen core is hard mode only (1/2,732 at low enrage up to 1/61).",kills:83,kph:15,kphA:1,diff:1,f:10,l:5,flag:["good","Changed to Scripture of Wen"]},
- {boss:"Gate of Elidinis",url:"Gate_of_Elidinis",needs:"Memory dowser or Runic attuner",mode:"Any",chance:"1/240",tip:"Each is 1/480 per kill (Drop Log estimate).",kills:240,kph:20,diff:0,f:10,l:5},
- {boss:"Profane Scabarite",url:"Profane_Scabarite",needs:"Spectral lens",mode:"On Slayer task",chance:"1/512",tip:"1/4,096 off task · 1/512 on a Scabarite task. A Slayer monster (87 Slayer), not a boss.",kills:512,kph:60,kphA:1,diff:1,f:10,l:5,flag:["warn","Needs a Slayer task"]},
- {boss:"Legiones",url:"Ascension_grips",needs:"Ascension grips",mode:"On Slayer task",chance:"1/2,056",tip:"Per Legio kill, and only on a Slayer assignment. Each fight also uses an Ascension keystone (1/64 drop).",kills:2056,kph:20,kphA:1,diff:2,f:10,l:5,flag:["bad","Replace it, e.g. with any Ascension signet"]},
- {boss:"Zuk",url:"TzKal-Zuk",needs:"Scripture of Ful or Magma Tempest codex",mode:"Normal",chance:"1/50",tip:"Each is 1/100 in normal mode and 1/50 in hard mode (3 kills/hr).",kills:50,kph:5,diff:2,f:10,l:5},
- {boss:"Nex",url:"Nex",needs:"1 Torva + 1 Pernix + 1 Virtus piece",mode:"Solo",chance:"Any piece 1/21",tip:"Each piece 1/384: Torva 5/384, Pernix 5/384, Virtus 7/384 per kill. One of each set takes about 129 kills.",kills:129,kph:20,diff:2,f:25,l:15},
- {boss:"Croesus",url:"Croesus",needs:"Any of 9 uniques",mode:"4-man, 420+ contribution",chance:"1/50",tip:"In a public mass (180–229 contribution) it is 1/200 per kill at about 16 kills/hr.",kills:50,kph:9,diff:0,f:10,l:5},
- {boss:"ED2",url:"Dragonkin_Laboratory",needs:"Any of 3 greater codices",mode:"Solo",chance:"about 1/28 per run",tip:"Each codex is 1/83 solo from its own boss (Astellarn, Verak Lith, Black stone dragon). Duo 1/166, trio 1/250.",kills:28,kph:2,diff:2,f:10,l:5},
+// [boss, wiki page, needs, avg kills, kills/hr, difficulty 0 Low..3 Very high, note]
+const B=[
+ ["Araxxor","Araxxi","1 leg piece AND 1 Araxxi piece",130,14,1],
+ ["Vorago","Vorago","Seismic wand or singularity",120,7,2],
+ ["Raksha","Raksha,_the_Shadow_Colossus","Any of 4 uniques",81,20,2],
+ ["Telos","Telos,_the_Warden","Any dormant weapon",1100,10,3,"Name an enrage"],
+ ["Kerapac","Kerapac,_the_bound","Wrist wraps or Greater Conc. Blast codex",127,25,1],
+ ["Nakatra","Nakatra,_Devourer_Eternal","Roar, Ode or mosaic",30,5,2],
+ ["Queen Black Dragon","Queen_Black_Dragon","Complete royal crossbow",26,28,0],
+ ["Ghrazi Bloodknights","The_Ghrazi_Blood_Knights","Invoke Arisen Flesh codex",175,6,3,"Name an enrage"],
+ ["Zamorak","Zamorak,_Lord_of_Chaos","Chaos Roar codex",284,10,3,"Name an enrage"],
+ ["Ambassador","The_Ambassador","Any eldritch crossbow piece",55,2,2],
+ ["Ivar","Ivar,_King_of_Bones","Skull mask AND Bonecrusher maul",96,50,0],
+ ["Vorkath","Zemouregal_%26_Vorkath","Invoke Lord of Bones codex",150,15,1],
+ ["Arch-Glacor","Arch-Glacor","Frozen core, Scripture of Wen or Leng artefact",83,15,1],
+ ["Gate of Elidinis","Gate_of_Elidinis","Memory dowser or Runic attuner",240,20,0],
+ ["Profane Scabarite","Profane_Scabarite","Spectral lens",512,60,1,"Say: on Slayer task"],
+ ["Legiones","Ascension_grips","Ascension grips",2056,20,2,"Replace (clean-up 2)"],
+ ["Zuk","TzKal-Zuk","Scripture of Ful or Magma Tempest codex",50,5,2],
+ ["Nex","Nex","1 Torva + 1 Pernix + 1 Virtus piece",129,20,2],
+ ["Croesus","Croesus","Any of 9 uniques",50,9,0],
+ ["ED2","Dragonkin_Laboratory","Any of 3 greater codices",28,2,2],
 ];
-const DIFFNAME=["Low","Mid","High","Very high"],SHARE=[1,.8,.5,.25];
-BOUNTIES.forEach(b=>{b.hours=b.kills==null?8:b.kills/b.kph;let s=b.hours<=2?1:b.hours<=6?2:b.hours<=15?3:4;if(b.diff>=2)s++;b.tier="T"+Math.min(4,s)});
-const TIERNAME={T1:"EASY",T2:"MEDIUM",T3:"HARD",T4:"ELITE"};
-const TCLASS={T1:"t1",T2:"t2",T3:"t3",T4:"t4"};
-const FAIR={T1:[5,2],T2:[10,4],T3:[25,10],T4:[60,25]};
-const RICH={T1:[8,3],T2:[20,8],T3:[45,18],T4:[100,40]};
-const tp=(t,f,l)=>`<span class="pts" tabindex="0" data-tip="${f} points first winner, ${l} points each later winner">${t} ${f}/${l}</span>`;
-const pv=(f,l)=>`<span class="pts" tabindex="0" data-tip="${f} points first winner, ${l} points each later winner">${f} / ${l}</span>`;
-const OPTS=[
- {id:"today",name:"Before",tag:"OLD SHEET POINTS",pts:null,mult:2,jack:false,draw:false,
-  bullets:[`The points we had until 21 Nov (mostly ${pv(10,5)})`,"×2 on the first claim after 72h","No big prizes"]},
- {id:"A",name:"A · Fair tiers",tag:"CHEAPEST",pts:FAIR,mult:2,jack:false,draw:false,
-  bullets:[`Points by tier: ${tp("Easy",5,2)} · ${tp("Medium",10,4)} · ${tp("Hard",25,10)} · ${tp("Elite",60,25)}`,"Keeps ×2 after 72h","Fairer, but still no \"omg\" prize"]},
- {id:"B",name:"B · Rich tiers",tag:"NOW IN THE SHEET",pts:RICH,mult:1.5,jack:false,draw:false,
-  bullets:[`${tp("Easy",8,3)} · ${tp("Medium",20,8)} · ${tp("Hard",45,18)} · ${tp("Elite",100,40)}`,"×1.5 after 72h (the sheet still says ×2)","About 2.5 times the old points"]},
- {id:"C",name:"C · Grand Bounty",tag:"CLOSEST TO THE OLD BOUNTIES",pts:RICH,mult:1.5,jack:true,draw:false,
-  bullets:["B, plus the first player to finish an Elite bounty wins a GP prize","Not won? +50M on the next Elite, up to 300M","The pot grows on the board, so people see it coming"]},
- {id:"D",name:"D · Monthly Big Draw",tag:"EVERYONE HAS A SHOT",pts:RICH,mult:1.5,jack:false,draw:true,
-  bullets:["B, plus one big GP prize drawn every month","Every claim gives 1 ticket, whatever the tier, so mid-level players have the same shot","Casual players can win too; the cost is fixed in advance"]},
- {id:"R",name:"B + C + D",tag:"RECOMMENDED",pts:RICH,mult:1.5,jack:true,draw:true,rec:true,
-  bullets:["Rich tiers for the steady weekly rewards","Grand Bounty for the rare \"I did it\" moment","Monthly draw so everyone who plays has a chance"]},
-];
-function rng(seed){return function(){seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
-function simulate(o,N,H,jackM){
-  const R=rng(12345),W=20000;let pts=0,jack=0,wins=0,pot=null;
-  for(let w=0;w<W;w++){
-    const b=BOUNTIES[Math.floor(R()*BOUNTIES.length)],t=b.tier,p=SHARE[b.diff]*(1-Math.exp(-H/b.hours));
-    let n=0,first=999;for(let i=0;i<N;i++){if(R()<p){n++;const tm=R()*168;if(tm<first)first=tm}}
-    const isJ=o.jack&&t==="T4";
-    if(n){const [f,l]=o.pts?o.pts[t]:[b.f,b.l];pts+=f*(first>72?o.mult:1)+l*(n-1);
-      if(isJ){jack+=pot===null?jackM:pot;wins++;pot=null}}
-    else if(isJ){pot=Math.min((pot===null?jackM:pot)+50,Math.max(300,jackM))}
-  }
-  return{ptsWk:pts/W,jackWk:jack/W,jackYr:wins/W*52};
-}
-const $=id=>document.getElementById(id);
-const fmtM=m=>m>=1000?(m/1000).toFixed(2).replace(/\.?0+$/,"")+"B":Math.round(m)+"M";
-function state(){return{N:Math.max(2,+$("cPlayers").value||10),H:Math.max(.5,+$("cHours").value||4),gpp:+$("cGpp").value||.5,draw:+$("cDraw").value||0,jackM:+$("cJack").value||0,old:+$("cOld").value||0,oldEvery:Math.max(1,+$("cOldEvery").value||1),bond:+$("cBond").value||0}}
-let RES=[];
-function compute(){
-  const s=state();
-  RES=OPTS.map(o=>{const r=simulate(o,s.N,s.H,s.jackM);const ptsM=r.ptsWk*s.gpp*4.333,jackMo=r.jackWk*4.333,drawMo=o.draw?s.draw:0;
-    const big=r.jackYr+(o.draw&&s.draw>=100?12:0);
-    return{...o,...r,ptsM,jackMo,drawMo,total:ptsM+jackMo+drawMo,perPlayer:r.ptsWk/s.N,big,pBig:1-Math.pow(1-1/s.N,big)}});
-  const oldMo=s.old*4.333/s.oldEvery;
-  render(s,oldMo);
-}
-function render(s,oldMo){
-  const today=RES[0],rec=RES[5];
-  const pts100=Math.round(100/s.gpp);
-  $("oldMonthly").textContent=fmtM(oldMo);
-  document.querySelectorAll("[data-cost]").forEach(el=>{const o=RES.find(r=>r.id===el.dataset.cost);el.textContent=fmtM(o.total)});
-  document.querySelectorAll("[data-big]").forEach(el=>{const o=RES.find(r=>r.id===el.dataset.big);el.textContent=Math.round(o.big)});
-  $("findings").innerHTML=[
-    [fmtM(today.total)+" / month","What the old points paid out, at most. The old 100M+ bounties were about "+fmtM(oldMo)+" a month."],
-    [today.perPlayer.toFixed(1)+" pts / week","What an average active player earned with the old points. The 100M item ("+pts100+" pts) takes about "+Math.round(pts100/today.perPlayer)+" weeks."],
-    [fmtM(RES[2].total)+" / month","What the points now in the sheet (option B) pay out, at most. Players earn about "+RES[2].perPlayer.toFixed(1)+" points a week."],
-    [fmtM(rec.total)+" / month","Our recommendation (B + C + D): about "+Math.round(rec.big)+" prizes of 100M+ a year, and each active player has a "+Math.round(rec.pBig*100)+"% chance a year of winning one."],
-  ].map(([b,t])=>`<div class="finding"><span class="big">${b}</span><p>${t}</p></div>`).join("");
-  $("optCards").innerHTML=RES.map(o=>`<article class="opt${o.rec?" rec":""}"><span class="tag">${o.tag}</span><h3>${o.name}</h3><ul>${o.bullets.map(x=>`<li>${x}</li>`).join("")}</ul>
-    <div class="stat"><span>Cost per month</span><b>${fmtM(o.total)}</b></div>
-    <div class="stat" style="border:0;padding:0;margin:0"><span>Big prizes (100M+) a year</span><b>${o.big?o.big.toFixed(1):"0"}</b></div></article>`).join("");
-  const ratio=t=>t<=oldMo*0.5?'<span class="pill good">under half the old cost</span>':t<=oldMo?'<span class="pill warn">under the old cost</span>':'<span class="pill bad">more than the old cost</span>';
-  $("costTable").innerHTML=`<thead><tr><th>Option</th><th class="n">Points / month</th><th class="n">Grand Bounty</th><th class="n">Draw</th><th class="n">Total / month</th><th class="n">Per year</th><th class="n">Avg player pts/wk</th><th class="n">Big prizes / yr</th><th class="n">Chance a player wins one / yr</th><th>vs old</th></tr></thead><tbody>`+
-    RES.map(o=>`<tr class="${o.rec?"hl":""}"><td><b>${o.name}</b></td><td class="n">${fmtM(o.ptsM)}</td><td class="n">${o.jack?fmtM(o.jackMo):"–"}</td><td class="n">${o.draw?fmtM(o.drawMo):"–"}</td><td class="n"><b>${fmtM(o.total)}</b></td><td class="n">${fmtM(o.total*12)}</td><td class="n">${o.perPlayer.toFixed(1)}</td><td class="n">${o.big.toFixed(1)}</td><td class="n">${o.big?Math.round(o.pBig*100)+"%":"–"}</td><td>${ratio(o.total)}</td></tr>`).join("")+
-    `<tr><td><b>Old bounties</b></td><td class="n">–</td><td class="n">–</td><td class="n">–</td><td class="n"><b>${fmtM(oldMo)}</b></td><td class="n">${fmtM(oldMo*12)}</td><td class="n">–</td><td class="n">${(52/s.oldEvery).toFixed(0)}</td><td class="n">–</td><td></td></tr></tbody>`;
-  drawChart(oldMo);
-  const chip=(txt,tip)=>tip?`<span class="pts" tabindex="0" data-tip="${tip}">${txt}</span>`:txt;
-  $("tierTable").innerHTML=`<thead><tr><th>Boss</th><th>Needs</th><th>Mode used</th><th>Chance per kill</th><th class="n">Avg kills</th><th class="n">Kills/hr</th><th class="n">Hours</th><th>Boss</th><th>Tier</th><th class="n">Before</th><th class="n">Now (sheet)</th><th>Note</th></tr></thead><tbody>`+
-    BOUNTIES.map(b=>{const [f,l]=RICH[b.tier];const fl=b.flag?`<span class="pill ${b.flag[0]}">${b.flag[1]}</span>`:"";
-      return`<tr><td><b><a href="${W_}${b.url}" target="_blank" rel="noopener" style="color:inherit">${b.boss}</a></b></td><td>${b.needs}</td><td class="sub">${b.mode}</td><td>${chip(b.chance,b.tip)}</td><td class="n">${b.kills==null?"?":b.kills.toLocaleString("en")}</td><td class="n">${b.kph}${b.kphA?' <span class="pill warn">assumed</span>':""}</td><td class="n">${b.kills==null?"~8?":b.hours<1?"<1":Math.round(b.hours)}</td><td class="sub">${DIFFNAME[b.diff]}</td><td><span class="tier ${TCLASS[b.tier]}">${TIERNAME[b.tier]}</span></td><td class="n">${pv(b.f,b.l)}</td><td class="n">${pv(f,l)}</td><td>${fl}</td></tr>`}).join("")+"</tbody>";
-  const items=[["Prize wheel spin",20],["Learner session",30],["Devourer's Nexus",45],["Pick next week's bounty",50],["Enchantment of Dread",75],["Enchantment of Flames",150],["100M GP from clan bank",200]];
-  const cols=[RES[0],RES[2]];
-  $("shopTable").innerHTML=`<thead><tr><th>Item</th><th class="n">Pts</th>${cols.map(o=>`<th class="n">${o.id==="today"?"Before":"Now (B)"}</th>`).join("")}</tr></thead><tbody>`+
-    items.map(([n,c])=>`<tr><td>${n}</td><td class="n">${c}</td>${cols.map(o=>{const w=c/o.perPlayer;return`<td class="n">${w<1?"<1":Math.round(w)} wk</td>`}).join("")}</tr>`).join("")+
-    `</tbody>`;
-  const wheelNow=[["+5 pts",40,5,0],["Nothing",25,0,0],["+20 pts",15,20,0],["5M GP",15,0,5],["50M",4,0,50],["Bond",1,0,s.bond]];
-  const wheelNew=[["Nothing",35,0,0],["+10 pts (half back)",30,10,0],["5M GP",20,0,5],["15M GP",10,0,15],["50M GP",4,0,50],["Bond",1,0,s.bond]];
-  const ev=w=>{const t=w.reduce((a,r)=>a+r[1],0);let v=0,g=0;w.forEach(r=>{v+=r[1]/t*(r[2]*s.gpp+r[3]);g+=r[1]/t*r[3]});return{v,g,t}};
-  const a=ev(wheelNow),b=ev(wheelNew),price=20*s.gpp;
-  const rows=wheelNow.map((r,i)=>`<tr><td>${r[0]}</td><td class="n">${r[1]}%</td><td>${wheelNew[i][0]}</td><td class="n">${wheelNew[i][1]}%</td></tr>`).join("");
-  $("wheelTable").innerHTML=`<thead><tr><th>Current wheel</th><th class="n">Odds</th><th>Proposed</th><th class="n">Odds</th></tr></thead><tbody>${rows}
-    <tr class="hl"><td><b>Pays back</b></td><td class="n"><b>${fmtM(a.v*1)} (${Math.round(a.v/price*100)}%)</b></td><td><b>Pays back</b></td><td class="n"><b>${fmtM(b.v)} (${Math.round(b.v/price*100)}%)</b></td></tr></tbody>`;
-  $("wheelNote").textContent=`Per ${fmtM(price)} spin, today's wheel gives back about ${a.v.toFixed(1)}M on average, of which ${a.g.toFixed(1)}M is real GP the clan pays out. The proposed wheel gives back about ${b.v.toFixed(1)}M (${b.g.toFixed(1)}M GP) and has more GP prizes players can see. Either way the wheel saves the clan money compared with buying GP in the shop, so it is a good place for points to go.`;
-}
-function drawChart(oldMo){
-  const svg=$("chart"),W=svg.clientWidth||900,rowH=34,top=8,left=Math.min(150,W*0.34),right=56,H=top+RES.length*rowH+30;
-  svg.setAttribute("height",H);svg.setAttribute("viewBox",`0 0 ${W} ${H}`);
-  const max=Math.max(oldMo,...RES.map(r=>r.total))*1.08||1,x=v=>left+(W-left-right)*v/max;
-  const step=max>800?200:max>300?100:50;let g="";
-  for(let v=0;v<=max;v+=step){g+=`<line x1="${x(v)}" x2="${x(v)}" y1="${top}" y2="${H-24}" stroke="var(--line)"/><text x="${x(v)}" y="${H-8}" font-size="11" fill="var(--muted)" text-anchor="middle">${fmtM(v)}</text>`}
-  RES.forEach((r,i)=>{const y=top+i*rowH+6,h=rowH-14;let cx=left;
-    g+=`<text x="${left-8}" y="${y+h/2+4}" font-size="12" fill="var(--ink)" text-anchor="end" font-weight="${r.rec?700:500}">${r.name}</text>`;
-    [["ptsM","var(--s1)","Points"],["jackMo","var(--s2)","Grand Bounty"],["drawMo","var(--s3)","Draw"]].forEach(([k,c,lab])=>{const v=r[k];if(v<=0)return;const w=Math.max(1,x(v)-left-2);
-      g+=`<rect class="bar" data-tip="${r.name} · ${lab}: ${fmtM(v)} / month" x="${cx}" y="${y}" width="${w}" height="${h}" rx="3" fill="${c}"/>`;cx+=w+2});
-    g+=`<text x="${cx+6}" y="${y+h/2+4}" font-size="12" fill="var(--ink)" font-family="JetBrains Mono, monospace">${fmtM(r.total)}</text>`;
-  });
-  g+=`<line x1="${x(oldMo)}" x2="${x(oldMo)}" y1="${top}" y2="${H-24}" stroke="var(--ink)" stroke-width="1.5" stroke-dasharray="5 4"/><text x="${x(oldMo)-4}" y="${top+10}" font-size="11" fill="var(--ink-2)" text-anchor="end">old bounties ${fmtM(oldMo)}</text>`;
-  svg.innerHTML=g;
-  const tip=$("tip"),box=$("chartBox");
-  svg.querySelectorAll(".bar").forEach(b=>{b.addEventListener("mousemove",e=>{const r=box.getBoundingClientRect();tip.textContent=b.dataset.tip;tip.style.left=(e.clientX-r.left)+"px";tip.style.top=(e.clientY-r.top)+"px";tip.hidden=false});b.addEventListener("mouseleave",()=>tip.hidden=true)});
-}
-["cPlayers","cHours","cGpp","cDraw","cJack","cOld","cOldEvery","cBond"].forEach(id=>$(id).addEventListener("input",compute));
-window.addEventListener("resize",()=>drawChart(state().old*4.333/state().oldEvery));
-compute();
+const DN=["Low","Mid","High","Very high"],TN=["","EASY","MEDIUM","HARD","ELITE"],PTS=["","20 / 15","30 / 20","45 / 25","70 / 35"];
+const rows=B.map(([boss,url,needs,k,kph,d,note])=>{const h=k/kph;let t=h<=2?1:h<=6?2:h<=15?3:4;if(d>=2)t++;t=Math.min(4,t);return{boss,url,needs,h,d,t,note}}).sort((a,b)=>a.t-b.t||a.h-b.h);
+document.getElementById("tierTable").innerHTML=`<thead><tr><th>Boss</th><th>Needs</th><th class="n">Hours</th><th>Boss level</th><th>Tier</th><th class="n">Points</th><th>To do</th></tr></thead><tbody>`+
+ rows.map(r=>`<tr><td><b><a href="${W_}${r.url}" target="_blank" rel="noopener" style="color:inherit">${r.boss}</a></b></td><td>${r.needs}</td><td class="n">${r.h<1?"<1":Math.round(r.h)}</td><td>${DN[r.d]}</td><td><span class="tier t${r.t}">${TN[r.t]}</span></td><td class="n">${PTS[r.t]}</td><td>${r.note?`<span class="pill ${r.boss==="Legiones"?"bad":"warn"}">${r.note}</span>`:""}</td></tr>`).join("")+"</tbody>";
 </script>
