@@ -121,6 +121,7 @@ needs "Mention @everyone, @here and All Roles" in the board/awards channel.
 
 | Setting | Default | Meaning |
 |---|---|---|
+| `Closed_Bounties` | empty | History Week Of dates (e.g. `2026-11-16`, comma separated) of posted bounties to shut: no claims, hidden from /bhbounty and /bhpast, but they still count as that week's post (no early new bounty). For test bounties. |
 | `Role_Message` | empty | Link to a message (right-click → Copy Message Link). Reacting on it with `Role_Emoji` gives the `Bounty_Ping_Role_ID` role; removing the reaction takes it away. Any message works, e.g. the clan announcement. Several messages: put the links in the same cell separated by commas (or spaces / new lines); someone who reacted on two keeps the role until both reactions are gone. |
 | `Role_Emoji` | 🎯 | The emoji to react with. The bot adds it to the message itself, so players only click it. |
 

@@ -506,9 +506,12 @@ const GUIDE_TITLE = '🎯 Bounty Hunter — how it works';
 function helpEmbed(settings, { admin = false, pinned = false } = {}) {
   const board = chan(settings.boardChannelId, 'the bounty board');
   const subs = chan(settings.submissionsChannelId, 'the submissions channel');
-  const awards = chan(settings.awardsChannelId, 'the awards channel');
+  // The pinned guide lives in the board channel: say "this channel" there instead of linking to itself.
+  const here = id => pinned && Boolean(id) && id === settings.boardChannelId;
+  const awards = here(settings.awardsChannelId) ? 'this channel' : chan(settings.awardsChannelId, 'the awards channel');
+  const boardWhere = here(settings.boardChannelId) ? 'this channel' : board;
   const steps = [
-    `**1.** Every **Monday** (random hour, UTC) a new boss bounty is posted and pinned in ${board}. Or type **/bhbounty**. ` +
+    `**1.** Every **Monday** (random hour, UTC) a new boss bounty is posted and pinned in ${boardWhere}. Or type **/bhbounty**. ` +
       `The boss is random, and a boss doesn't come back within ${settings.repeatCooldownWeeks} weeks.`,
     '**2.** Get the drop(s) it asks for. Some bounties have several parts: you need **all** of them.',
     '**3.** Take a screenshot of the drop. If the bounty has a 🔑 **code word**, type it in your in-game chat first so it shows in the screenshot.',

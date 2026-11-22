@@ -60,6 +60,9 @@ function readSettings(raw = {}) {
     postHourFrom: from,
     postHourTo: to,
     lateClaimHours: Math.max(0, num(raw.Late_Claim_Hours, 0)),
+    // Posted bounties shut by hand (History Week Of dates, comma separated). They take no claims,
+    // /bhbounty doesn't show them, but they still count as that week's post (no early new bounty).
+    closedWeeks: closedWeeksFrom(raw.Closed_Bounties),
     lastMonthlyPost: str(raw.Last_Monthly_Post),
     wheelChannelId: str(raw.Wheel_Channel_ID),
     adminLogChannelId: str(raw.Admin_Log_Channel_ID) || str(raw.Shop_Admin_Channel_ID),
@@ -270,6 +273,7 @@ function currentBounty(bounties) {
 
 /** When a posted bounty stops taking claims (Infinity while it is current). */
 function closesAt(bounties, bounty, settings) {
+  if ((settings.closedWeeks || []).includes(bounty.weekOf)) return bounty.postedAt || 0;
   const posted = postedBounties(bounties);
   const next = posted.find(b => b.postedAt > bounty.postedAt);
   return next ? next.postedAt + settings.lateClaimHours * HOUR : Infinity;
@@ -743,6 +747,25 @@ function spinPlan(count, winner, rand = Math.random) {
 // ---------------------------------------------------------------------------
 
 /** Message id from a Discord message link or a bare id. */
+/** Closed_Bounties cell → ISO dates. Takes 2026-11-16, 16/11/2026 or a date value; comma / space separated. */
+function closedWeeksFrom(value) {
+  if (value instanceof Date) return [isoDate(value.getTime() + 12 * HOUR)];
+  const out = [];
+  for (const part of str(value).split(/[\s,;]+/).filter(Boolean)) {
+    // A date cell can arrive as a timestamp at local midnight (e.g. 2026-11-15T23:00:00.000Z): round to the day.
+    if (/^\d{4}-\d{2}-\d{2}T/.test(part) && !isNaN(Date.parse(part))) {
+      const iso = isoDate(Date.parse(part) + 12 * HOUR);
+      if (!out.includes(iso)) out.push(iso);
+      continue;
+    }
+    let m = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(part);
+    const iso = m ? `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`
+      : (m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(part)) ? `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}` : null;
+    if (iso && !out.includes(iso)) out.push(iso);
+  }
+  return out;
+}
+
 /** Role_Message cell → [{ channelId ('' = board channel), messageId }], duplicates removed. */
 function roleMessagesFrom(text) {
   const out = [];

@@ -533,4 +533,15 @@ test('transfer amounts are whole, above the minimum and affordable', () => {
   });
 }
 
+test("Closed_Bounties shuts a posted bounty but it still counts as that week's post", () => {
+  const s1 = b.readSettings({ Closed_Bounties: "2026-11-16, 9/11/2026" });
+  assert.deepEqual(s1.closedWeeks, ["2026-11-16", "2026-11-09"]);
+  assert.deepEqual(b.readSettings({}).closedWeeks, []);
+  const at = Date.parse("2026-11-22T10:55:00Z");
+  const list = [{ weekOf: "2026-11-16", boss: "Gate", postedAt: at, messageId: "" }];
+  assert.equal(b.openBounties(list, at + 3600e3, b.readSettings({})).length, 1);
+  assert.equal(b.openBounties(list, at + 3600e3, s1).length, 0);
+  assert.equal(b.closesAt(list, list[0], s1), at);
+});
+
 console.log(`bounty: ${passed} tests passed`);

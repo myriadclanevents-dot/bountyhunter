@@ -715,6 +715,9 @@ const handlers = {
     if (!(await needSheet(i))) return;
     const bounty = b.currentBounty(sheet.getBounties());
     if (!bounty) return i.reply(ephemeral({ content: `No bounty has been posted yet. The next one goes up on ${nextMondayText()} (random hour, UTC).` }));
+    if (now() >= b.closesAt(sheet.getBounties(), bounty, S()) && (S().closedWeeks || []).includes(bounty.weekOf)) {
+      return i.reply(ephemeral({ content: `There is no open bounty right now. The next one goes up on ${nextMondayText()} (random hour, UTC).` }));
+    }
     const view = viewFor(bounty);
     const progress = b.progressFor(bounty, b.activeSubmissions(sheet.getSubmissions()), i.user.id);
     const claim = view.claims.find(c => String(c.playerId) === i.user.id) || null;
@@ -787,7 +790,8 @@ const handlers = {
 
   async bhpast(i) {
     if (!(await needSheet(i))) return;
-    const posted = b.postedBounties(sheet.getBounties()).reverse().slice(0, 12);
+    const shut = S().closedWeeks || []; // Closed_Bounties = hidden (e.g. a test bounty)
+    const posted = b.postedBounties(sheet.getBounties()).filter(x => !shut.includes(x.weekOf)).reverse().slice(0, 12);
     const rows = posted.map(x => {
       const claims = b.activeClaims(sheet.getPoints(), x.weekOf);
       const first = claims.find(c => String(c.type).toLowerCase() === b.TYPE_FIRST);
@@ -1502,7 +1506,7 @@ const multiplierAnnounced = new Set();
 async function checkMultiplier(t) {
   const s = S();
   const bounty = b.currentBounty(sheet.getBounties());
-  if (!bounty || multiplierAnnounced.has(bounty.weekOf)) return;
+  if (!bounty || multiplierAnnounced.has(bounty.weekOf) || (s.closedWeeks || []).includes(bounty.weekOf)) return;
   const claims = b.activeClaims(sheet.getPoints(), bounty.weekOf);
   if (!b.multiplierActive(bounty, s, claims.length, t)) return;
   multiplierAnnounced.add(bounty.weekOf);
